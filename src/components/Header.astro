@@ -1,66 +1,111 @@
 ---
+// The top bar on every public page.
+// Phones: logo + dark mode button (the links live in BottomNav).
+// Tablets and bigger: logo + Home, Stories, Champions, Medals + dark mode button.
 const path = Astro.url.pathname;
-const active = (prefix: string) => (path.startsWith(prefix) ? 'page' : undefined);
+const links = [
+  { href: '/', label: 'Home', active: path === '/' },
+  { href: '/stories', label: 'Stories', active: path.startsWith('/stories') },
+  { href: '/champions', label: 'Champions', active: path.startsWith('/champions') || path.startsWith('/teams') },
+  { href: '/medals', label: 'Medals', active: path.startsWith('/medals') },
+];
 ---
 
 <header class="site-header">
-  <a href="/" class="brand" aria-label="KYC – Know Your Champions, home">
-    <span class="brand-mark">KYC</span>
-    <span class="brand-name">Know Your Champions</span>
-  </a>
+  <div class="inner">
+    <a href="/" class="brand" aria-label="KYC – Know Your Champions, home">
+      <!-- Your logo goes here: put the file in /public and change the src. -->
+      <img src="/favicon.svg" alt="" width="38" height="38" class="logo" />
+      <span class="words">
+        <span class="brand-mark">KYC</span>
+        <span class="brand-name">Know Your Champions</span>
+      </span>
+    </a>
 
-  <nav aria-label="Main">
-    <a href="/stories" aria-current={active('/stories')}>Stories</a>
-    <a href="/champions" aria-current={active('/champions')}>Champions</a>
-  </nav>
+    <nav aria-label="Main" class="top-nav">
+      {links.map((l) => <a href={l.href} aria-current={l.active ? 'page' : undefined}>{l.label}</a>)}
+    </nav>
 
-  <button class="theme-toggle" type="button" aria-label="Switch between light and dark mode">
-    <svg class="icon-moon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-      <path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"></path>
-    </svg>
-    <svg class="icon-sun" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
-      <circle cx="12" cy="12" r="4"></circle>
-      <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path>
-    </svg>
-  </button>
+    <button class="theme-toggle" type="button" aria-label="Switch between light and dark mode">
+      <svg class="icon-moon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"></path>
+      </svg>
+      <svg class="icon-sun" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="4"></circle>
+        <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path>
+      </svg>
+    </button>
+  </div>
 </header>
 
 <style>
+  /* Stays at the top while scrolling, slightly see-through */
   .site-header {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    border-bottom: 1px solid var(--line);
+    background: color-mix(in srgb, var(--bg) 88%, transparent);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+  .inner {
+    max-width: calc(var(--page) + 40px);
+    margin: 0 auto;
     height: 60px;
-    padding: 0 8px 0 20px;
+    padding: 0 12px 0 16px;
     display: flex;
     align-items: center;
-    gap: 12px;
-    border-bottom: 1px solid var(--line);
+    gap: 16px;
   }
-  .brand { display: flex; align-items: baseline; gap: 8px; text-decoration: none; color: var(--ink); margin-right: auto; }
-  .brand-mark { font-size: 22px; font-weight: 700; letter-spacing: -0.5px; }
-  .brand-name { font-size: 12px; color: var(--muted); }
 
-  nav { display: flex; gap: 4px; }
-  nav a {
-    padding: 10px 8px;
-    font-size: 14px;
+  .brand { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--ink); margin-right: auto; }
+  .logo { width: 34px; height: 34px; flex-shrink: 0; }
+  .words { display: flex; flex-direction: column; line-height: 1.1; }
+  .brand-mark { font-size: 20px; font-weight: 700; letter-spacing: -0.5px; }
+  .brand-name { font-size: 11px; color: var(--muted); }
+
+  /* Links: hidden on phones (BottomNav shows them), visible from tablets up */
+  .top-nav { display: none; gap: 4px; }
+  .top-nav a {
+    padding: 9px 16px;
+    border-radius: 999px;
+    font-size: 15px;
     font-weight: 600;
     color: var(--ink);
     text-decoration: none;
   }
-  nav a[aria-current='page'] { color: var(--accent-ink); text-decoration: underline; text-underline-offset: 6px; }
+  .top-nav a:hover { background: var(--soft); }
+  .top-nav a[aria-current='page'] {
+    background: color-mix(in srgb, var(--accent) 14%, var(--bg));
+    color: var(--accent-ink);
+  }
 
   .theme-toggle {
-    width: 44px; height: 44px;
-    border: 0; background: transparent; color: var(--ink);
-    display: flex; align-items: center; justify-content: center;
+    width: 42px;
+    height: 42px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: transparent;
+    color: var(--ink);
+    display: flex;
+    align-items: center;
+    justify-content: center;
     cursor: pointer;
+    flex-shrink: 0;
   }
+  .theme-toggle:hover { background: var(--soft); }
   .icon-sun { display: none; }
   :global([data-theme='dark']) .icon-sun { display: block; }
   :global([data-theme='dark']) .icon-moon { display: none; }
 
-  /* Small phones: hide the long name, keep the links */
-  @media (max-width: 420px) {
-    .brand-name { display: none; }
+  @media (min-width: 768px) {
+    .inner { max-width: calc(var(--page) + 64px); height: 72px; padding: 0 32px; gap: 28px; }
+    .logo { width: 38px; height: 38px; }
+    .brand-mark { font-size: 22px; }
+    .brand-name { font-size: 12px; }
+    .top-nav { display: flex; }
+    .theme-toggle { width: 44px; height: 44px; }
   }
 </style>
 

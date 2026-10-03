@@ -1,29 +1,190 @@
 ---
+// The footer on every public page: the journey road, the series' message,
+// links, and a button to share KYC.
 const page = Astro.url.pathname;
+const feedback = (kind: string) => `/feedback?kind=${kind}&page=${encodeURIComponent(page)}`;
+
+// Where the KYC series is posted. Add your links here, for example:
+//   { label: 'Instagram', href: 'https://instagram.com/yourname' },
+// The "Follow the series" group only appears once this list has links.
+const socials: { label: string; href: string }[] = [];
 ---
 
 <footer class="site-footer">
-  <a href={`/feedback?page=${encodeURIComponent(page)}`}>Suggest a correction or tip</a>
-  <nav aria-label="Footer">
-    <a href="/stories">All stories</a>
-    <a href="/champions">All champions</a>
-    <a href="/medals">All medals</a>
-  </nav>
-  <p class="muted small">KYC, Know Your Champions. Respect begins with recognition.</p>
+  <div class="inner">
+    <!-- The journey road that crosses into the footer and ends in gold -->
+    <div class="road" aria-hidden="true">
+      <span class="dot start"></span>
+      <span class="line"></span>
+      <span class="dot"></span>
+      <span class="line rough"></span>
+      <span class="dot setback"></span>
+      <span class="line rough"></span>
+      <span class="dot"></span>
+      <span class="line"></span>
+      <span class="gold"></span>
+    </div>
+
+    <p class="quote">The medals will be counted, but the hard work behind them is beyond numbers.</p>
+    <p class="motto">Respect begins with recognition.</p>
+
+    <div class="groups">
+      <nav class="group" aria-label="Explore">
+        <p class="group-title">Explore</p>
+        <a href="/">Home</a>
+        <a href="/stories">Stories</a>
+        <a href="/champions">Champions</a>
+        <a href="/medals">All medals</a>
+      </nav>
+
+      <nav class="group" aria-label="Help us">
+        <p class="group-title">Help us</p>
+        <a href={feedback('correction')}>Suggest a correction</a>
+        <a href={feedback('tip')}>Share a story tip</a>
+      </nav>
+
+      {
+        socials.length > 0 && (
+          <nav class="group" aria-label="Follow the series">
+            <p class="group-title">Follow the series</p>
+            {socials.map((s) => (
+              <a href={s.href} target="_blank" rel="noopener">{s.label}</a>
+            ))}
+          </nav>
+        )
+      }
+
+      <div class="share">
+        <p class="group-title">Let these names travel</p>
+        <button type="button" class="share-kyc">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"></path></svg>
+          Share KYC
+        </button>
+        <p class="share-status" role="status"></p>
+      </div>
+    </div>
+
+    <div class="legal">
+      <span>KYC, Know Your Champions</span>
+      <span>Aichi-Nagoya 2026 Asian Games</span>
+    </div>
+  </div>
 </footer>
 
 <style>
+  /* Deep blue in light mode, deep green in dark mode (same as the Story of the Day card) */
   .site-footer {
-    width: 100%;
-    max-width: 720px;
-    margin: 0 auto;
-    padding: 24px 20px 40px;
-    border-top: 1px solid var(--line);
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
-    font-size: 15px;
+    margin-top: 48px;
+    background: var(--card);
+    color: var(--card-ink);
   }
-  nav { display: flex; flex-wrap: wrap; gap: 20px; }
-  nav a { color: var(--ink); }
+  .inner {
+    max-width: calc(var(--page) + 40px);
+    margin: 0 auto;
+    padding: 0 20px 32px;
+  }
+
+  /* ---- The road: sits on the top edge, half above, half inside ---- */
+  .road { display: flex; align-items: center; transform: translateY(-50%); }
+  .line { flex: 1; height: 0; border-top: 3px solid var(--card-ink); }
+  .line.rough { border-top-style: dashed; border-color: var(--card-road-dim); }
+  .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--card-ink); flex-shrink: 0; }
+  .dot.start { background: var(--bg); border: 3px solid var(--card); width: 16px; height: 16px; }
+  .dot.setback { background: var(--card); border: 2px dashed var(--card-road-dim); width: 14px; height: 14px; }
+  .gold { width: 24px; height: 24px; border-radius: 50%; background: var(--gold); border: 4px solid var(--gold-bg); flex-shrink: 0; }
+
+  .quote {
+    margin-top: 14px;
+    font-family: var(--font-story);
+    font-size: 23px;
+    line-height: 1.3;
+    font-weight: 500;
+    max-width: 760px;
+  }
+  .motto { margin-top: 10px; font-size: 15px; color: var(--card-muted); }
+
+  .groups {
+    margin-top: 32px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 28px 20px;
+  }
+  .group { display: flex; flex-direction: column; gap: 4px; }
+  .group-title { font-size: 12px; font-weight: 700; color: var(--card-muted); margin-bottom: 6px; }
+  .group a { color: var(--card-ink); text-decoration: none; font-size: 15px; padding: 5px 0; }
+  .group a:hover { text-decoration: underline; text-underline-offset: 4px; }
+  .group a:focus-visible, .share-kyc:focus-visible { outline-color: var(--card-ink); }
+
+  .share { grid-column: 1 / -1; display: flex; flex-direction: column; }
+  .share-kyc {
+    min-height: 50px;
+    border-radius: 14px;
+    border: 0;
+    background: var(--card-ink);
+    color: var(--card);
+    font-family: inherit;
+    font-size: 15px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    cursor: pointer;
+  }
+  .share-status { margin-top: 8px; font-size: 13px; color: var(--card-muted); }
+  .share-status:empty { display: none; }
+
+  .legal {
+    margin-top: 36px;
+    padding-top: 16px;
+    border-top: 1px solid color-mix(in srgb, var(--card-ink) 18%, transparent);
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--card-muted);
+  }
+
+  /* ---- Tablets and bigger ---- */
+  @media (min-width: 768px) {
+    .site-footer { margin-top: 72px; }
+    .inner { max-width: calc(var(--page) + 64px); padding: 0 32px 36px; }
+    .quote { margin-top: 24px; font-size: 34px; line-height: 1.25; }
+    .motto { font-size: 16px; margin-top: 14px; }
+    .groups {
+      margin-top: 48px;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)) ;
+      gap: 32px;
+    }
+    .share { grid-column: auto; min-width: 240px; }
+    .legal { margin-top: 44px; }
+  }
 </style>
+
+<script>
+  // Shares the KYC home page using the phone's share menu, or copies the link.
+  document.querySelectorAll<HTMLButtonElement>('.share-kyc').forEach((button) => {
+    const status = button.parentElement?.querySelector('.share-status');
+    button.addEventListener('click', async () => {
+      const url = location.origin + '/';
+      const data = {
+        title: 'KYC – Know Your Champions',
+        text: 'Meet the people who won medals for India at the Asian Games, one journey at a time.',
+        url,
+      };
+      if (navigator.share) {
+        try {
+          await navigator.share(data);
+        } catch {}
+        return;
+      }
+      try {
+        await navigator.clipboard.writeText(url);
+        if (status) status.textContent = 'Link copied. Paste it anywhere to share.';
+      } catch {
+        if (status) status.textContent = url;
+      }
+    });
+  });
+</script>

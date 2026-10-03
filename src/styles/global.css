@@ -35,6 +35,8 @@
   --font-ui: 'Bricolage Grotesque', 'Segoe UI', system-ui, sans-serif;
   --font-story: 'Literata', Georgia, serif;
   --radius: 12px;
+  --page: 1160px;      /* widest content on big screens */
+  --read: 720px;       /* comfortable width for reading text */
 }
 
 /* ---------- 1b. Colours: dark mode ---------- */
@@ -69,7 +71,7 @@
 
 /* ---------- 2. Basics ---------- */
 *, *::before, *::after { box-sizing: border-box; }
-
+[hidden] { display: none !important; }
 html { -webkit-text-size-adjust: 100%; }
 
 body {

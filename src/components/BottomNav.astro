@@ -1,0 +1,98 @@
+---
+// The app-style bar at the bottom of the screen, on phones only.
+const path = Astro.url.pathname;
+const tabs = [
+  { href: '/', label: 'Home', icon: 'home', active: path === '/' },
+  { href: '/stories', label: 'Stories', icon: 'stories', active: path.startsWith('/stories') },
+  { href: '/champions', label: 'Champions', icon: 'champions', active: path.startsWith('/champions') || path.startsWith('/teams') },
+  { href: '/medals', label: 'Medals', icon: 'medals', active: path.startsWith('/medals') },
+];
+---
+
+<nav class="bottom-nav" aria-label="Main">
+  {
+    tabs.map((t) => (
+      <a href={t.href} aria-current={t.active ? 'page' : undefined}>
+        <span class="pill">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            {t.icon === 'home' && <path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" />}
+            {t.icon === 'stories' && (
+              <>
+                <path d="M4 5a2 2 0 0 1 2-2h12v16H6a2 2 0 0 0-2 2z" />
+                <path d="M4 21V5" />
+                <path d="M9 8h5" />
+              </>
+            )}
+            {t.icon === 'champions' && (
+              <>
+                <circle cx="9" cy="8" r="3.5" />
+                <path d="M2.5 20a6.5 6.5 0 0 1 13 0" />
+                <circle cx="17" cy="9" r="2.5" />
+                <path d="M16 14.2a5 5 0 0 1 5.5 5.8" />
+              </>
+            )}
+            {t.icon === 'medals' && (
+              <>
+                <circle cx="12" cy="15" r="6" />
+                <path d="M8.5 9.5L6 3h4l2 4 2-4h4l-2.5 6.5" />
+              </>
+            )}
+          </svg>
+        </span>
+        <span class="label">{t.label}</span>
+      </a>
+    ))
+  }
+</nav>
+
+<style>
+  .bottom-nav {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 60;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    height: calc(64px + env(safe-area-inset-bottom, 0px));
+    padding-bottom: env(safe-area-inset-bottom, 0px);   /* stays above the iPhone home line */
+    background: color-mix(in srgb, var(--bg) 94%, transparent);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-top: 1px solid var(--line);
+  }
+  a {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    color: var(--muted);
+    text-decoration: none;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .pill {
+    width: 56px;
+    height: 30px;
+    border-radius: 999px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  a[aria-current='page'] { color: var(--accent-ink); }
+  a[aria-current='page'] .pill { background: color-mix(in srgb, var(--accent) 16%, var(--bg)); }
+
+  /* Leave room at the bottom of every page so the bar never covers content */
+  @media (max-width: 767px) {
+    :global(body) { padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px)); }
+  }
+
+  /* Tablets and bigger use the top navbar instead */
+  @media (min-width: 768px) {
+    .bottom-nav { display: none; }
+  }
+  @media print {
+    .bottom-nav { display: none; }
+  }
+</style>

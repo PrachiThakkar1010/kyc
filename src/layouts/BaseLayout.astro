@@ -2,12 +2,14 @@
 import '../styles/global.css';
 import Header from '../components/Header.astro';
 import Footer from '../components/Footer.astro';
+import BottomNav from '../components/BottomNav.astro';
 
 interface Props {
   title: string;
   description?: string;
   image?: string | null;   // photo shown when the link is shared
   turnstile?: boolean;     // load Cloudflare's bot check on this page
+  narrow?: boolean;        // a single reading column, for simple pages
 }
 
 const {
@@ -15,6 +17,7 @@ const {
   description = 'Know the people who made India proud at the Aichi-Nagoya 2026 Asian Games, one journey at a time.',
   image = null,
   turnstile = false,
+  narrow = false,
 } = Astro.props;
 
 const fullTitle = title === 'KYC – Know Your Champions' ? title : `${title} | KYC – Know Your Champions`;
@@ -25,7 +28,7 @@ const url = Astro.url.href;
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>{fullTitle}</title>
     <meta name="description" content={description} />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
@@ -63,9 +66,10 @@ const url = Astro.url.href;
   </head>
   <body>
     <Header />
-    <main>
+    <main class:list={{ narrow }}>
       <slot />
     </main>
     <Footer />
+    <BottomNav />
   </body>
-</html>
+</html> 
