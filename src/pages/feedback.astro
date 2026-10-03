@@ -1,0 +1,94 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { adminClient } from '../lib/supabase';
+import { passedTurnstile } from '../lib/turnstile';
+import { text } from '../lib/http';
+import { TURNSTILE_SITE_KEY } from 'astro:env/server';
+
+const KINDS = [
+  { value: 'correction', label: 'A correction (a name, place or fact is wrong)' },
+  { value: 'tip', label: 'A story tip (something we should know)' },
+  { value: 'suggestion', label: 'A suggestion for the website' },
+  { value: 'other', label: 'Something else' },
+];
+
+let page = Astro.url.searchParams.get('page') ?? '';
+let kind = Astro.url.searchParams.get('kind') ?? 'correction';
+let message = '';
+let email = '';
+let error = '';
+let sent = false;
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  kind = text(form, 'kind');
+  message = text(form, 'message', 2000);
+  email = text(form, 'email', 200);
+  page = text(form, 'page', 300);
+
+  if (!KINDS.some((k) => k.value === kind)) kind = 'other';
+  if (!message) {
+    error = 'Write your message first.';
+  } else if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    error = 'That email address doesn\'t look right. Check it, or leave it empty.';
+  } else if (!(await passedTurnstile(form.get('cf-turnstile-response'), Astro.clientAddress))) {
+    error = 'The bot check did not pass. Wait a moment and send again.';
+  } else {
+    const { error: dbError } = await adminClient()
+      .from('feedback')
+      .insert({ kind, message, email: email || null, page_path: page.startsWith('/') ? page : null });
+    if (dbError) error = 'Your message could not be saved. Try again in a moment.';
+    else sent = true;
+  }
+}
+---
+
+<BaseLayout title="Suggest a correction or tip" turnstile>
+  <section class="head">
+    <h1>Suggest a correction or tip</h1>
+    <p class="muted">Only the KYC team sees what you send here. It is never published.</p>
+  </section>
+
+  {
+    sent ? (
+      <div class="notice ok sent">
+        Thank you. The KYC team will read your message.
+        {page.startsWith('/') && <> <a href={page}>Go back to the page you were reading</a>.</>}
+      </div>
+    ) : (
+      <form method="post" class="form">
+        {error && <p class="notice error" role="alert">{error}</p>}
+        <input type="hidden" name="page" value={page} />
+        {page.startsWith('/') && <p class="small muted">About the page: <a href={page}>{page}</a></p>}
+
+        <label class="field">
+          What is it?
+          <select name="kind">
+            {KINDS.map((k) => <option value={k.value} selected={k.value === kind}>{k.label}</option>)}
+          </select>
+        </label>
+
+        <label class="field">
+          Your message
+          <textarea name="message" rows="6" maxlength="2000" required placeholder="Her hometown is actually ..." >{message}</textarea>
+        </label>
+
+        <label class="field">
+          Your email <span class="hint">(optional, only if you'd like a reply)</span>
+          <input type="email" name="email" value={email} autocomplete="email" />
+        </label>
+
+        {TURNSTILE_SITE_KEY && <div class="cf-turnstile" data-sitekey={TURNSTILE_SITE_KEY} data-size="flexible" />}
+
+        <button type="submit" class="button">Send to the KYC team</button>
+      </form>
+    )
+  }
+</BaseLayout>
+
+<style>
+  .head { padding-top: 28px; margin-bottom: 20px; }
+  .head p { margin-top: 10px; }
+  .form { display: flex; flex-direction: column; gap: 16px; }
+  .sent { margin-top: 8px; }
+</style>

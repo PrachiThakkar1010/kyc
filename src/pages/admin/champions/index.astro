@@ -1,0 +1,118 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { friendlyError, uniqueSlug, withMessage } from '../../../lib/admin';
+import { optional, text } from '../../../lib/http';
+
+const db = Astro.locals.supabase;
+let error = '';
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const action = text(form, 'action');
+  const name = text(form, 'name', 120);
+  const sport = text(form, 'sport', 80);
+  if (!name || !sport) error = 'Fill in the name and the sport.';
+  else if (action === 'add_champion') {
+    const slug = await uniqueSlug(db, 'champions', name);
+    const { data, error: e } = await db
+      .from('champions')
+      .insert({ slug, name, sport, state: optional(form, 'state', 80), hometown: optional(form, 'hometown', 120) })
+      .select('id')
+      .single();
+    if (e) error = friendlyError(e);
+    else return Astro.redirect(withMessage(`/admin/champions/${data.id}`, `${name} added. Now add their medals.`));
+  } else if (action === 'add_team') {
+    const slug = await uniqueSlug(db, 'teams', name);
+    const { data, error: e } = await db.from('teams').insert({ slug, name, sport }).select('id').single();
+    if (e) error = friendlyError(e);
+    else return Astro.redirect(withMessage(`/admin/teams/${data.id}`, `${name} added. Now add its players and medal.`));
+  }
+}
+
+const [champions, teams, medals, members] = await Promise.all([
+  db.from('champions').select('id, name, sport, state, photo_path').order('name'),
+  db.from('teams').select('id, name, sport, photo_path').order('name'),
+  db.from('medals').select('champion_id, team_id'),
+  db.from('team_members').select('team_id'),
+]);
+const medalCount = (key: 'champion_id' | 'team_id', id: string) => (medals.data ?? []).filter((m) => m[key] === id).length;
+const memberCount = (id: string) => (members.data ?? []).filter((m) => m.team_id === id).length;
+---
+
+<AdminLayout title="Champions and teams" wide>
+  <section class="admin-page">
+    <h1>Champions and teams</h1>
+    {error && <p class="notice error" role="alert">{error}</p>}
+
+    <div class="two">
+      <form method="post" class="panel">
+        <h2>Add a champion</h2>
+        <input type="hidden" name="action" value="add_champion" />
+        <label class="field">Full name <input type="text" name="name" required maxlength="120" /></label>
+        <label class="field">Sport <input type="text" name="sport" required maxlength="80" placeholder="Athletics" /></label>
+        <div class="two">
+          <label class="field">State <input type="text" name="state" maxlength="80" /></label>
+          <label class="field">Hometown <input type="text" name="hometown" maxlength="120" /></label>
+        </div>
+        <button type="submit" class="button">Add champion</button>
+      </form>
+      <form method="post" class="panel">
+        <h2>Add a team</h2>
+        <p class="small muted">For squads and for any medal won by more than one athlete, like a relay or a doubles pair.</p>
+        <input type="hidden" name="action" value="add_team" />
+        <label class="field">Team name <input type="text" name="name" required maxlength="120" placeholder="India men's hockey team" /></label>
+        <label class="field">Sport <input type="text" name="sport" required maxlength="80" placeholder="Hockey" /></label>
+        <button type="submit" class="button">Add team</button>
+      </form>
+    </div>
+
+    <label class="field">
+      Search
+      <input type="search" id="filter" placeholder="Type a name or sport" autocomplete="off" />
+    </label>
+
+    <h2>Teams ({teams.data?.length ?? 0})</h2>
+    <div class="table-wrap">
+      <table class="table searchable">
+        <thead><tr><th>Team</th><th>Sport</th><th>Players</th><th>Medals</th></tr></thead>
+        <tbody>
+          {(teams.data ?? []).map((t) => (
+            <tr data-text={`${t.name} ${t.sport}`.toLowerCase()}>
+              <td><a href={`/admin/teams/${t.id}`}>{t.name}</a></td>
+              <td>{t.sport}</td>
+              <td>{memberCount(t.id) || <span class="tag pending">None yet</span>}</td>
+              <td>{medalCount('team_id', t.id)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+
+    <h2>Champions ({champions.data?.length ?? 0})</h2>
+    <div class="table-wrap">
+      <table class="table searchable">
+        <thead><tr><th>Name</th><th>Sport</th><th>State</th><th>Photo</th></tr></thead>
+        <tbody>
+          {(champions.data ?? []).map((c) => (
+            <tr data-text={`${c.name} ${c.sport} ${c.state ?? ''}`.toLowerCase()}>
+              <td><a href={`/admin/champions/${c.id}`}>{c.name}</a></td>
+              <td>{c.sport}</td>
+              <td>{c.state ?? <span class="muted">—</span>}</td>
+              <td>{c.photo_path ? 'Yes' : <span class="muted">No</span>}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</AdminLayout>
+
+<script>
+  const input = document.querySelector<HTMLInputElement>('#filter')!;
+  input.addEventListener('input', () => {
+    const q = input.value.toLowerCase().trim();
+    document.querySelectorAll<HTMLTableRowElement>('.searchable tbody tr').forEach((row) => {
+      row.hidden = !!q && !row.dataset.text!.includes(q);
+    });
+  });
+</script>

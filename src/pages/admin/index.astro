@@ -1,0 +1,96 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { prettyDate, todayIST } from '../../lib/format';
+
+const db = Astro.locals.supabase;
+const [stories, pending, newFeedback] = await Promise.all([
+  db
+    .from('stories')
+    .select('id, slug, headline, status, featured_on, author_name, updated_at, champion:champions(name), team:teams(name)')
+    .order('featured_on', { ascending: false, nullsFirst: true })
+    .order('updated_at', { ascending: false }),
+  db.from('cheers').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
+  db.from('feedback').select('id', { count: 'exact', head: true }).eq('status', 'new'),
+]);
+
+const today = todayIST();
+type Row = { id: string; slug: string; headline: string; status: string; featured_on: string | null; author_name: string | null; champion: { name: string } | null; team: { name: string } | null };
+const rows = (stories.data ?? []) as unknown as Row[];
+const todays = rows.find((s) => s.status === 'published' && s.featured_on === today);
+const scheduled = rows.filter((s) => s.status === 'published' && s.featured_on && s.featured_on > today).length;
+
+function state(s: Row) {
+  if (s.status === 'draft') return { label: 'Draft', cls: 'draft' };
+  if (s.featured_on && s.featured_on > today) return { label: 'Scheduled', cls: 'pending' };
+  if (s.featured_on === today) return { label: 'Story of the day', cls: 'published' };
+  return { label: 'Published', cls: 'published' };
+}
+---
+
+<AdminLayout title="Stories" wide>
+  <section class="admin-page">
+    <div class="actions" style="justify-content: space-between">
+      <h1>Stories</h1>
+      <a href="/admin/stories/new" class="button">New story</a>
+    </div>
+
+    <div class="two">
+      <div class="panel">
+        <span class="small muted">Story of the day</span>
+        {todays ? <a href={`/admin/stories/${todays.id}`}><strong>{todays.headline}</strong></a> : <strong>Nothing for today yet</strong>}
+        <span class="small muted">{scheduled} scheduled for later days</span>
+      </div>
+      <a class="panel link-panel" href="/admin/cheers?status=pending">
+        <span class="small muted">Cheers waiting for review</span>
+        <strong class="big">{pending.count ?? 0}</strong>
+      </a>
+      <a class="panel link-panel" href="/admin/feedback">
+        <span class="small muted">New corrections and tips</span>
+        <strong class="big">{newFeedback.count ?? 0}</strong>
+      </a>
+    </div>
+
+    {
+      rows.length ? (
+        <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Story</th>
+                <th>About</th>
+                <th>Day</th>
+                <th>Status</th>
+                <th>Writer</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((s) => {
+                const st = state(s);
+                return (
+                  <tr>
+                    <td><a href={`/admin/stories/${s.id}`}>{s.headline}</a></td>
+                    <td>{s.champion?.name ?? s.team?.name}</td>
+                    <td>{s.featured_on ? prettyDate(s.featured_on) : '—'}</td>
+                    <td><span class={`tag ${st.cls}`}>{st.label}</span></td>
+                    <td class="muted">{s.author_name}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div class="panel">
+          <strong>Write the first story</strong>
+          <p class="muted">Pick a champion, give the story a headline, and build their journey stop by stop.</p>
+          <a href="/admin/stories/new" class="button">New story</a>
+        </div>
+      )
+    }
+  </section>
+</AdminLayout>
+
+<style>
+  .link-panel { color: var(--ink); text-decoration: none; }
+  .big { font-size: 30px; line-height: 1; }
+</style>

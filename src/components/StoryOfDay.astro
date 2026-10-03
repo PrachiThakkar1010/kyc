@@ -1,0 +1,102 @@
+---
+// The big Story of the Day card on the home page. The whole card is one link.
+import JourneyRoad from './JourneyRoad.astro';
+import type { MedalKind, Story } from '../lib/types';
+import { photoUrl } from '../lib/supabase';
+import { readMinutes } from '../lib/format';
+import { storySubject } from '../lib/data';
+
+interface Props {
+  story: Story;
+  medal: MedalKind | null;
+}
+const { story, medal } = Astro.props;
+const subject = storySubject(story);
+const stops = story.stops ?? [];
+const cover = photoUrl(story.cover_path);
+const minutes = readMinutes([story.hook, ...stops.map((s) => s.body)]);
+const setbacks = stops.filter((s) => s.kind === 'setback').length;
+const hometown = story.champion?.hometown || story.champion?.state;
+const teaser = [
+  `${stops.length} ${stops.length === 1 ? 'stop' : 'stops'}`,
+  setbacks ? `${setbacks} ${setbacks === 1 ? 'setback' : 'setbacks'}` : null,
+].filter(Boolean).join(', ');
+const pronoun = subject.isTeam ? 'their' : 'the';
+---
+
+<a href={`/stories/${story.slug}`} class="sotd" aria-label={`Read today's story: ${subject.name}. ${story.headline}`}>
+  <div class="photo">
+    {cover ? <img src={cover} alt="" loading="eager" /> : <span class="placeholder">{subject.name}</span>}
+    <span class="badge">Story of the day</span>
+    {
+      medal && (
+        <span class={`medal-pill ${medal} on-photo`}>
+          <span class={`medal-dot ${medal}`} />
+          {medal[0]!.toUpperCase() + medal.slice(1)}
+        </span>
+      )
+    }
+  </div>
+
+  <div class="body">
+    <p class="headline">{story.headline}</p>
+    <div>
+      <p class="name">{subject.name}</p>
+      <p class="meta">{subject.sport}{hometown ? `, from ${hometown}` : ''}</p>
+    </div>
+
+    {stops.length > 1 && <JourneyRoad stops={stops} />}
+
+    <p class="meta">{teaser}, and {pronoun} road to the podium. {minutes} min read.</p>
+
+    <span class="cta">
+      Show the journey
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg>
+    </span>
+  </div>
+</a>
+
+<style>
+  .sotd {
+    display: block;
+    border-radius: 22px;
+    overflow: hidden;
+    background: var(--card);
+    color: var(--card-ink);
+    border: 1px solid var(--card-edge);
+    text-decoration: none;
+  }
+  .photo {
+    position: relative;
+    height: 290px;
+    background: var(--card-photo);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .photo img { width: 100%; height: 100%; object-fit: cover; }
+  .placeholder { font-size: 28px; font-weight: 700; color: var(--card-muted); padding: 0 24px; text-align: center; }
+  .badge {
+    position: absolute; top: 16px; left: 16px;
+    padding: 7px 12px; border-radius: 999px;
+    background: var(--card-ink); color: var(--card);
+    font-size: 13px; font-weight: 700;
+  }
+  .on-photo { position: absolute; top: 16px; right: 16px; font-weight: 700; padding: 7px 12px; }
+  .body { padding: 22px 20px; display: flex; flex-direction: column; gap: 14px; }
+  .headline { font-family: var(--font-story); font-size: 30px; line-height: 1.15; font-weight: 500; }
+  .name { font-size: 18px; font-weight: 700; }
+  .meta { font-size: 14px; color: var(--card-muted); }
+  .cta {
+    min-height: 54px;
+    border-radius: 14px;
+    background: var(--card-ink);
+    color: var(--card);
+    font-size: 16px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+  }
+</style>

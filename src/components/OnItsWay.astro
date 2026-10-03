@@ -1,0 +1,30 @@
+---
+// Shown on a champion's page before their story is written:
+// a dotted road leading to their medal.
+import type { MedalKind } from '../lib/types';
+
+interface Props {
+  medal: MedalKind | null;
+  name: string;
+}
+const { medal, name } = Astro.props;
+---
+
+<div class="waiting">
+  <div class="road" aria-hidden="true">
+    <span class="line"></span>
+    <span class={`end ${medal ?? ''}`}></span>
+  </div>
+  <p><strong>Their story is on its way.</strong></p>
+  <p class="muted small">We're writing about {name}'s journey. Know something about it? <a href={`/feedback?kind=tip&page=${encodeURIComponent(Astro.url.pathname)}`}>Share a tip</a>.</p>
+</div>
+
+<style>
+  .waiting { padding: 20px; border-radius: 16px; background: var(--soft); display: flex; flex-direction: column; gap: 8px; }
+  .road { display: flex; align-items: center; margin-bottom: 6px; }
+  .line { flex: 1; border-top: 3px dotted var(--setback); }
+  .end { width: 22px; height: 22px; border-radius: 50%; background: var(--accent); border: 4px solid var(--bg); }
+  .end.gold { background: var(--gold); }
+  .end.silver { background: var(--silver); }
+  .end.bronze { background: var(--bronze); }
+</style>

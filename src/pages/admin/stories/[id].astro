@@ -1,0 +1,362 @@
+---
+// Create (/admin/stories/new) or edit (/admin/stories/<id>) a story.
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { photoUrl } from '../../../lib/supabase';
+import { STOP_KINDS, STOP_LABEL, todayIST } from '../../../lib/format';
+import { friendlyError, uniqueSlug, withMessage } from '../../../lib/admin';
+import { removePhotos, uploadPhoto } from '../../../lib/upload';
+import { isUuid, optional, text } from '../../../lib/http';
+import type { Stop, StopKind, Story } from '../../../lib/types';
+
+const db = Astro.locals.supabase;
+const profile = Astro.locals.profile;
+const param = Astro.params.id ?? 'new';
+const isNew = param === 'new';
+if (!isNew && !isUuid(param)) return Astro.redirect('/admin');
+
+// ---------- Load the story being edited ----------
+let story: Story | null = null;
+if (!isNew) {
+  const { data } = await db.from('stories').select('*, stops:story_stops(*)').eq('id', param).maybeSingle();
+  if (!data) return Astro.redirect(withMessage('/admin', 'That story no longer exists.', 'error'));
+  story = data as Story;
+  story.stops?.sort((a, b) => a.position - b.position);
+}
+
+let error = '';
+
+// ---------- Save or delete ----------
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+
+  if (text(form, 'action') === 'delete' && story) {
+    const { error: delError } = await db.from('stories').delete().eq('id', story.id);
+    if (delError) error = friendlyError(delError);
+    else {
+      await removePhotos(db, [story.cover_path, ...(story.stops ?? []).map((s) => s.photo_path)]);
+      return Astro.redirect(withMessage('/admin', 'Story deleted.'));
+    }
+  } else {
+    try {
+      // Who the story is about: "c:<id>" for a champion, "t:<id>" for a team.
+      const subject = text(form, 'subject');
+      const [type, subjectId] = subject.split(':');
+      if (!['c', 't'].includes(type ?? '') || !isUuid(subjectId)) throw new Error('Choose who this story is about.');
+
+      const headline = text(form, 'headline', 160);
+      if (!headline) throw new Error('Write a headline.');
+      const status = text(form, 'status') === 'published' ? 'published' : 'draft';
+      const featuredOn = text(form, 'featured_on') || null;
+      if (status === 'published' && !featuredOn) throw new Error('Choose the day this story becomes Story of the Day.');
+
+      // Stops arrive as parallel lists, one entry per stop.
+      const kinds = form.getAll('stop_kind').map(String);
+      const titles = form.getAll('stop_title').map((v) => String(v).trim());
+      if (!kinds.length) throw new Error('Add at least one stop to the journey.');
+      const missing = titles.findIndex((t) => !t);
+      if (missing >= 0) throw new Error(`Stop ${missing + 1} needs a title.`);
+
+      // Make sure the story has an id before photos are stored under it.
+      const storyId = story?.id ?? crypto.randomUUID();
+      const folder = `stories/${storyId}`;
+
+      // Cover photo
+      let coverPath = story?.cover_path ?? null;
+      const newCover = await uploadPhoto(db, form.get('cover'), folder);
+      const oldPhotos: (string | null)[] = [];
+      if (newCover || form.get('remove_cover') === '1') {
+        oldPhotos.push(coverPath);
+        coverPath = newCover;
+      }
+
+      // Stop photos
+      const keptPaths = form.getAll('stop_photo_path').map(String);
+      const files = form.getAll('stop_photo');
+      const stops = [];
+      for (let i = 0; i < kinds.length; i++) {
+        const uploaded = await uploadPhoto(db, files[i] ?? null, folder);
+        stops.push({
+          story_id: storyId,
+          position: i,
+          kind: (STOP_KINDS.includes(kinds[i] as StopKind) ? kinds[i] : 'turning_point') as StopKind,
+          label: String(form.getAll('stop_label')[i] ?? '').trim().slice(0, 30) || null,
+          place: String(form.getAll('stop_place')[i] ?? '').trim().slice(0, 120) || null,
+          title: titles[i]!.slice(0, 160),
+          body: String(form.getAll('stop_body')[i] ?? '').trim().slice(0, 8000),
+          photo_path: uploaded ?? (keptPaths[i] || null),
+          photo_credit: String(form.getAll('stop_photo_credit')[i] ?? '').trim().slice(0, 120) || null,
+        });
+      }
+      const stillUsed = new Set(stops.map((s) => s.photo_path));
+      for (const old of story?.stops ?? []) if (old.photo_path && !stillUsed.has(old.photo_path)) oldPhotos.push(old.photo_path);
+
+      // Web address: chosen by the writer, or made from the subject's name.
+      let wantedSlug = text(form, 'slug', 80);
+      if (!wantedSlug) {
+        const { data: s } = await db.from(type === 't' ? 'teams' : 'champions').select('slug').eq('id', subjectId).single();
+        wantedSlug = s?.slug ?? headline;
+      }
+      const slug = await uniqueSlug(db, 'stories', wantedSlug, story?.id);
+
+      const row = {
+        id: storyId,
+        slug,
+        headline,
+        hook: optional(form, 'hook', 600),
+        champion_id: type === 'c' ? subjectId : null,
+        team_id: type === 't' ? subjectId : null,
+        cover_path: coverPath,
+        cover_credit: optional(form, 'cover_credit', 120),
+        featured_on: featuredOn,
+        status,
+        ...(story ? {} : { author_id: profile.id, author_name: profile.display_name }),
+      };
+
+      const { error: saveError } = story
+        ? await db.from('stories').update(row).eq('id', story.id)
+        : await db.from('stories').insert(row);
+      if (saveError) throw new Error(friendlyError(saveError));
+
+      // Replace the journey with what's in the form.
+      const { error: delStops } = await db.from('story_stops').delete().eq('story_id', storyId);
+      if (delStops) throw new Error(friendlyError(delStops));
+      const { error: stopError } = await db.from('story_stops').insert(stops);
+      if (stopError) throw new Error(friendlyError(stopError));
+
+      await removePhotos(db, oldPhotos);
+
+      const saved = status === 'published'
+        ? featuredOn && featuredOn > todayIST() ? 'Saved. It will appear on its day.' : 'Saved and published.'
+        : 'Draft saved.';
+      return Astro.redirect(withMessage(`/admin/stories/${storyId}`, saved));
+    } catch (e) {
+      error = e instanceof Error ? e.message : 'The story could not be saved.';
+    }
+  }
+}
+
+// ---------- Data for the form ----------
+const [champions, teams] = await Promise.all([
+  db.from('champions').select('id, name, sport').order('name'),
+  db.from('teams').select('id, name, sport').order('name'),
+]);
+const preselect = Astro.url.searchParams.get('for') ?? '';
+const currentSubject = story ? (story.team_id ? `t:${story.team_id}` : `c:${story.champion_id}`) : preselect;
+
+const blankStop = (kind: StopKind): Stop => ({
+  id: '', story_id: '', position: 0, kind, label: null, place: null, title: '', body: '', photo_path: null, photo_credit: null,
+});
+const stops: Stop[] = story?.stops?.length
+  ? story.stops
+  : [blankStop('origin'), blankStop('turning_point'), blankStop('setback'), blankStop('breakthrough'), blankStop('podium')];
+---
+
+<AdminLayout title={isNew ? 'New story' : 'Edit story'} wide>
+  <section class="admin-page">
+    <div class="actions" style="justify-content: space-between">
+      <h1>{isNew ? 'New story' : 'Edit story'}</h1>
+      {story && <a class="button-outline" href={`/stories/${story.slug}?preview=1`} target="_blank" rel="noopener">Preview</a>}
+    </div>
+    {error && <p class="notice error" role="alert">{error}</p>}
+
+    <form method="post" enctype="multipart/form-data" class="stack" id="story-form">
+      <div class="panel">
+        <h2>The story</h2>
+        <label class="field">
+          About
+          <select name="subject" required>
+            <option value="">Choose a champion or team</option>
+            <optgroup label="Champions">
+              {(champions.data ?? []).map((c) => <option value={`c:${c.id}`} selected={currentSubject === `c:${c.id}`}>{c.name} ({c.sport})</option>)}
+            </optgroup>
+            <optgroup label="Teams">
+              {(teams.data ?? []).map((t) => <option value={`t:${t.id}`} selected={currentSubject === `t:${t.id}`}>{t.name}</option>)}
+            </optgroup>
+          </select>
+        </label>
+        <label class="field">
+          Headline <span class="hint">The moment, in a few words. It leads the Story of the Day card: "Gold, on her birthday."</span>
+          <input type="text" name="headline" maxlength="160" required value={story?.headline ?? ''} />
+        </label>
+        <label class="field">
+          Hook <span class="hint">One or two lines that make people want to read on.</span>
+          <textarea name="hook" rows="2" maxlength="600">{story?.hook ?? ''}</textarea>
+        </label>
+        <div class="two">
+          <label class="field">
+            Story of the Day on
+            <input type="date" name="featured_on" value={story?.featured_on ?? ''} />
+          </label>
+          <label class="field">
+            Status
+            <select name="status">
+              <option value="draft" selected={story?.status !== 'published'}>Draft (only writers see it)</option>
+              <option value="published" selected={story?.status === 'published'}>Published (public on its day)</option>
+            </select>
+          </label>
+        </div>
+        <label class="field">
+          Web address <span class="hint">Optional. Leave empty to use the champion's name. Letters, numbers and dashes.</span>
+          <input type="text" name="slug" maxlength="80" pattern="[a-z0-9\-]*" value={story?.slug ?? ''} placeholder="lovlina-borgohain" />
+        </label>
+      </div>
+
+      <div class="panel">
+        <h2>Cover photo</h2>
+        {
+          story?.cover_path && (
+            <div class="actions">
+              <img class="thumb" src={photoUrl(story.cover_path)} alt="Current cover" />
+              <label class="small"><input type="checkbox" name="remove_cover" value="1" /> Remove this photo</label>
+            </div>
+          )
+        }
+        <label class="field">
+          {story?.cover_path ? 'Replace with' : 'Photo'} <span class="hint">Use only photos you have permission to use.</span>
+          <input type="file" name="cover" accept="image/jpeg,image/png,image/webp" />
+        </label>
+        <label class="field">
+          Photo credit
+          <input type="text" name="cover_credit" maxlength="120" value={story?.cover_credit ?? ''} placeholder="Photographer or source" />
+        </label>
+      </div>
+
+      <div class="panel">
+        <h2>The journey</h2>
+        <p class="small muted">
+          Each stop is a chapter. Mark the hard part as a <strong>Setback</strong> so it shows as a dashed stretch of road. End with
+          <strong>The podium</strong>. Leave a blank line between paragraphs.
+        </p>
+        <div id="stops" class="stack">
+          {
+            stops.map((s, i) => (
+              <fieldset class="stop-editor">
+                <legend>Stop {i + 1}</legend>
+                <div class="two">
+                  <label class="field">
+                    Type
+                    <select name="stop_kind">
+                      {STOP_KINDS.map((k) => <option value={k} selected={s.kind === k}>{STOP_LABEL[k]}</option>)}
+                    </select>
+                  </label>
+                  <label class="field">
+                    Road label <span class="hint">One or two words, e.g. "Golaghat"</span>
+                    <input type="text" name="stop_label" maxlength="30" value={s.label ?? ''} />
+                  </label>
+                </div>
+                <label class="field">Title <input type="text" name="stop_title" maxlength="160" value={s.title} /></label>
+                <label class="field">Place and year <input type="text" name="stop_place" maxlength="120" value={s.place ?? ''} placeholder="Baro Mukhia, Golaghat, 2009" /></label>
+                <label class="field">Chapter <textarea name="stop_body" rows="6">{s.body}</textarea></label>
+                <div class="two">
+                  <div class="field">
+                    Photo <span class="hint">Optional</span>
+                    <input type="hidden" name="stop_photo_path" value={s.photo_path ?? ''} />
+                    {s.photo_path && (
+                      <div class="actions current-photo">
+                        <img class="thumb" src={photoUrl(s.photo_path)} alt="" />
+                        <button type="button" class="button-quiet" data-remove-photo>Remove photo</button>
+                      </div>
+                    )}
+                    <input type="file" name="stop_photo" accept="image/jpeg,image/png,image/webp" />
+                  </div>
+                  <label class="field">Photo credit <input type="text" name="stop_photo_credit" maxlength="120" value={s.photo_credit ?? ''} /></label>
+                </div>
+                <div class="actions">
+                  <button type="button" class="button-outline" data-move="-1">Move up</button>
+                  <button type="button" class="button-outline" data-move="1">Move down</button>
+                  <button type="button" class="button-quiet" data-delete-stop>Delete stop</button>
+                </div>
+              </fieldset>
+            ))
+          }
+        </div>
+        <button type="button" class="button-outline" id="add-stop">Add a stop</button>
+      </div>
+
+      <div class="actions sticky-save">
+        <button type="submit" class="button">Save</button>
+        <a href="/admin" class="button-quiet">Cancel</a>
+      </div>
+    </form>
+
+    {
+      story && (
+        <form method="post" data-confirm="Delete this story and its photos? This cannot be undone.">
+          <input type="hidden" name="action" value="delete" />
+          <button type="submit" class="button button-danger">Delete story</button>
+        </form>
+      )
+    }
+  </section>
+
+  <template id="stop-template">
+    <fieldset class="stop-editor">
+      <legend>Stop</legend>
+      <div class="two">
+        <label class="field">Type
+          <select name="stop_kind">
+            {STOP_KINDS.map((k) => <option value={k} selected={k === 'turning_point'}>{STOP_LABEL[k]}</option>)}
+          </select>
+        </label>
+        <label class="field">Road label <span class="hint">One or two words</span><input type="text" name="stop_label" maxlength="30" /></label>
+      </div>
+      <label class="field">Title <input type="text" name="stop_title" maxlength="160" /></label>
+      <label class="field">Place and year <input type="text" name="stop_place" maxlength="120" /></label>
+      <label class="field">Chapter <textarea name="stop_body" rows="6"></textarea></label>
+      <div class="two">
+        <div class="field">Photo <span class="hint">Optional</span>
+          <input type="hidden" name="stop_photo_path" value="" />
+          <input type="file" name="stop_photo" accept="image/jpeg,image/png,image/webp" />
+        </div>
+        <label class="field">Photo credit <input type="text" name="stop_photo_credit" maxlength="120" /></label>
+      </div>
+      <div class="actions">
+        <button type="button" class="button-outline" data-move="-1">Move up</button>
+        <button type="button" class="button-outline" data-move="1">Move down</button>
+        <button type="button" class="button-quiet" data-delete-stop>Delete stop</button>
+      </div>
+    </fieldset>
+  </template>
+</AdminLayout>
+
+<style>
+  .panel h2 { font-size: 20px; }
+  .stop-editor { border: 1px solid var(--line); border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 12px; margin: 0; }
+  .stop-editor legend { font-weight: 700; padding: 0 6px; }
+  .sticky-save { position: sticky; bottom: 0; padding: 12px 0; background: var(--bg); border-top: 1px solid var(--line); }
+</style>
+
+<script>
+  const list = document.querySelector<HTMLElement>('#stops')!;
+  const template = document.querySelector<HTMLTemplateElement>('#stop-template')!;
+
+  function renumber() {
+    list.querySelectorAll('.stop-editor legend').forEach((l, i) => (l.textContent = `Stop ${i + 1}`));
+  }
+
+  document.querySelector('#add-stop')!.addEventListener('click', () => {
+    list.append(template.content.cloneNode(true));
+    renumber();
+    list.lastElementChild?.querySelector<HTMLInputElement>('input[name=stop_title]')?.focus();
+  });
+
+  list.addEventListener('click', (event) => {
+    const button = (event.target as HTMLElement).closest('button');
+    if (!button) return;
+    const stop = button.closest<HTMLElement>('.stop-editor')!;
+
+    if (button.dataset.move) {
+      const sibling = button.dataset.move === '-1' ? stop.previousElementSibling : stop.nextElementSibling;
+      if (sibling) button.dataset.move === '-1' ? sibling.before(stop) : sibling.after(stop);
+      renumber();
+      button.focus();
+    } else if ('deleteStop' in button.dataset) {
+      if (list.children.length === 1) return alert('A journey needs at least one stop.');
+      if (confirm('Delete this stop?')) stop.remove();
+      renumber();
+    } else if ('removePhoto' in button.dataset) {
+      stop.querySelector<HTMLInputElement>('input[name=stop_photo_path]')!.value = '';
+      button.closest('.current-photo')?.remove();
+    }
+  });
+</script>

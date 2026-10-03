@@ -1,0 +1,251 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { photoUrl } from '../../../lib/supabase';
+import { friendlyError, uniqueSlug, withMessage } from '../../../lib/admin';
+import { removePhotos, uploadPhoto } from '../../../lib/upload';
+import { isUuid, optional, text } from '../../../lib/http';
+import { MEDAL_LABEL, prettyDate } from '../../../lib/format';
+import type { Champion, Medal, Team } from '../../../lib/types';
+
+const db = Astro.locals.supabase;
+const id = Astro.params.id ?? '';
+if (!isUuid(id)) return Astro.redirect('/admin/champions');
+const here = `/admin/teams/${id}`;
+
+const { data: found } = await db.from('teams').select('*').eq('id', id).maybeSingle();
+if (!found) return Astro.redirect(withMessage('/admin/champions', 'That team no longer exists.', 'error'));
+const team = found as Team;
+let error = '';
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const action = text(form, 'action');
+  try {
+    if (action === 'save') {
+      const name = text(form, 'name', 120);
+      const sport = text(form, 'sport', 80);
+      if (!name || !sport) throw new Error('Name and sport are needed.');
+      let photoPath = team.photo_path;
+      const uploaded = await uploadPhoto(db, form.get('photo'), `teams/${id}`);
+      if (uploaded || form.get('remove_photo') === '1') {
+        await removePhotos(db, [photoPath]);
+        photoPath = uploaded;
+      }
+      const slug = await uniqueSlug(db, 'teams', text(form, 'slug', 80) || name, id);
+      const { error: e } = await db.from('teams').update({
+        name, sport, slug,
+        bio: optional(form, 'bio', 4000),
+        photo_path: photoPath,
+        photo_credit: optional(form, 'photo_credit', 120),
+      }).eq('id', id);
+      if (e) throw new Error(friendlyError(e));
+      return Astro.redirect(withMessage(here, 'Saved.'));
+    }
+
+    if (action === 'add_member') {
+      let championId = text(form, 'champion_id');
+      const newName = text(form, 'new_name', 120);
+      if (!isUuid(championId)) {
+        if (!newName) throw new Error('Choose a player, or type the name of a new one.');
+        const slug = await uniqueSlug(db, 'champions', newName);
+        const { data, error: e } = await db.from('champions').insert({ slug, name: newName, sport: team.sport }).select('id').single();
+        if (e) throw new Error(friendlyError(e));
+        championId = data.id;
+      }
+      const { count } = await db.from('team_members').select('champion_id', { count: 'exact', head: true }).eq('team_id', id);
+      const { error: e } = await db.from('team_members').insert({
+        team_id: id,
+        champion_id: championId,
+        note: optional(form, 'note', 300),
+        position: count ?? 0,
+      });
+      if (e) throw new Error(e.code === '23505' ? 'That player is already in this team.' : friendlyError(e));
+      return Astro.redirect(withMessage(here, 'Player added.'));
+    }
+
+    if (action === 'update_member') {
+      const { error: e } = await db.from('team_members')
+        .update({ note: optional(form, 'note', 300) })
+        .eq('team_id', id).eq('champion_id', text(form, 'champion_id'));
+      if (e) throw new Error(friendlyError(e));
+      return Astro.redirect(withMessage(here, 'Player note saved.'));
+    }
+
+    if (action === 'remove_member') {
+      const { error: e } = await db.from('team_members').delete().eq('team_id', id).eq('champion_id', text(form, 'champion_id'));
+      if (e) throw new Error(friendlyError(e));
+      return Astro.redirect(withMessage(here, 'Player removed from the team. Their own page still exists.'));
+    }
+
+    if (action === 'add_medal') {
+      const medal = text(form, 'medal');
+      if (!['gold', 'silver', 'bronze'].includes(medal)) throw new Error('Choose gold, silver or bronze.');
+      const event = text(form, 'event', 160);
+      if (!event) throw new Error('Write the event name.');
+      const { error: e } = await db.from('medals').insert({
+        medal, event, team_id: id,
+        sport: text(form, 'sport', 80) || team.sport,
+        won_on: text(form, 'won_on') || null,
+      });
+      if (e) throw new Error(friendlyError(e));
+      return Astro.redirect(withMessage(here, 'Medal added.'));
+    }
+
+    if (action === 'delete_medal') {
+      const { error: e } = await db.from('medals').delete().eq('id', text(form, 'medal_id')).eq('team_id', id);
+      if (e) throw new Error(friendlyError(e));
+      return Astro.redirect(withMessage(here, 'Medal removed.'));
+    }
+
+    if (action === 'delete') {
+      const { error: e } = await db.from('teams').delete().eq('id', id);
+      if (e) throw new Error(friendlyError(e));
+      await removePhotos(db, [team.photo_path]);
+      return Astro.redirect(withMessage('/admin/champions', `${team.name} deleted.`));
+    }
+  } catch (e) {
+    error = e instanceof Error ? e.message : 'Something went wrong.';
+  }
+}
+
+const [{ data: memberRows }, { data: medals }, { data: allChampions }, { data: stories }] = await Promise.all([
+  db.from('team_members').select('note, position, champion:champions(id, name)').eq('team_id', id).order('position'),
+  db.from('medals').select('*').eq('team_id', id),
+  db.from('champions').select('id, name, sport').order('name'),
+  db.from('stories').select('id, headline, status').eq('team_id', id),
+]);
+const members = (memberRows ?? []).map((m) => ({ note: m.note as string | null, champion: m.champion as unknown as Pick<Champion, 'id' | 'name'> }));
+const memberIds = new Set(members.map((m) => m.champion.id));
+---
+
+<AdminLayout title={team.name} wide>
+  <section class="admin-page">
+    <div class="actions" style="justify-content: space-between">
+      <h1>{team.name}</h1>
+      <div class="actions">
+        <a class="button-outline" href={`/teams/${team.slug}`} target="_blank" rel="noopener">View page</a>
+        <a class="button" href={`/admin/stories/new?for=t:${id}`}>Write the team's story</a>
+      </div>
+    </div>
+    {error && <p class="notice error" role="alert">{error}</p>}
+
+    {
+      (stories ?? []).length > 0 && (
+        <p class="small">Stories: {(stories ?? []).map((s, i) => (<>{i > 0 && ', '}<a href={`/admin/stories/${s.id}`}>{s.headline}</a> <span class={`tag ${s.status}`}>{s.status}</span></>))}</p>
+      )
+    }
+
+    <div class="panel">
+      <h2>Players ({members.length})</h2>
+      {members.length === 0 && <p class="small muted">No players yet. Add each player below; each one gets their own page too.</p>}
+      <ul class="plain">
+        {members.map((m) => (
+          <li class="member">
+            <a href={`/admin/champions/${m.champion.id}`}><strong>{m.champion.name}</strong></a>
+            <form method="post" class="note-form">
+              <input type="hidden" name="action" value="update_member" />
+              <input type="hidden" name="champion_id" value={m.champion.id} />
+              <label class="field">
+                <span class="visually-hidden">Note about {m.champion.name}</span>
+                <input type="text" name="note" maxlength="300" value={m.note ?? ''} placeholder="A line about their role, e.g. scored the winning goal" />
+              </label>
+              <button type="submit" class="button-outline">Save note</button>
+            </form>
+            <form method="post" class="inline" data-confirm={`Remove ${m.champion.name} from this team?`}>
+              <input type="hidden" name="action" value="remove_member" />
+              <input type="hidden" name="champion_id" value={m.champion.id} />
+              <button type="submit" class="button-quiet">Remove from team</button>
+            </form>
+          </li>
+        ))}
+      </ul>
+
+      <form method="post" class="stack add-member">
+        <input type="hidden" name="action" value="add_member" />
+        <h3>Add a player</h3>
+        <div class="two">
+          <label class="field">Existing champion
+            <select name="champion_id">
+              <option value="">Choose…</option>
+              {(allChampions ?? []).filter((c) => !memberIds.has(c.id)).map((c) => <option value={c.id}>{c.name} ({c.sport})</option>)}
+            </select>
+          </label>
+          <label class="field">Or a new player's full name <input type="text" name="new_name" maxlength="120" /></label>
+        </div>
+        <label class="field">Note <span class="hint">Optional</span> <input type="text" name="note" maxlength="300" /></label>
+        <button type="submit" class="button-outline">Add player</button>
+      </form>
+    </div>
+
+    <div class="panel">
+      <h2>Medals</h2>
+      <ul class="plain">
+        {((medals ?? []) as Medal[]).map((m) => (
+          <li class="actions">
+            <span class={`medal-pill ${m.medal}`}><span class={`medal-dot ${m.medal}`} />{MEDAL_LABEL[m.medal]}</span>
+            <span>{m.sport}, {m.event}{m.won_on ? `, ${prettyDate(m.won_on)}` : ''}</span>
+            <form method="post" class="inline" data-confirm="Remove this medal?">
+              <input type="hidden" name="action" value="delete_medal" />
+              <input type="hidden" name="medal_id" value={m.id} />
+              <button type="submit" class="button-quiet">Remove</button>
+            </form>
+          </li>
+        ))}
+      </ul>
+      <form method="post" class="stack">
+        <input type="hidden" name="action" value="add_medal" />
+        <div class="two">
+          <label class="field">Medal
+            <select name="medal"><option value="gold">Gold</option><option value="silver">Silver</option><option value="bronze">Bronze</option></select>
+          </label>
+          <label class="field">Event <input type="text" name="event" required maxlength="160" /></label>
+          <label class="field">Sport <input type="text" name="sport" maxlength="80" value={team.sport} /></label>
+          <label class="field">Date won <input type="date" name="won_on" /></label>
+        </div>
+        <button type="submit" class="button-outline">Add medal</button>
+      </form>
+    </div>
+
+    <form method="post" enctype="multipart/form-data" class="panel">
+      <h2>Team details</h2>
+      <input type="hidden" name="action" value="save" />
+      <div class="two">
+        <label class="field">Team name <input type="text" name="name" required maxlength="120" value={team.name} /></label>
+        <label class="field">Sport <input type="text" name="sport" required maxlength="80" value={team.sport} /></label>
+      </div>
+      <label class="field">About the team <span class="hint">Leave a blank line between paragraphs.</span>
+        <textarea name="bio" rows="5" maxlength="4000">{team.bio ?? ''}</textarea>
+      </label>
+      <div class="two">
+        <div class="field">
+          Team photo
+          {team.photo_path && (
+            <div class="actions">
+              <img class="thumb" src={photoUrl(team.photo_path)} alt="" />
+              <label class="small"><input type="checkbox" name="remove_photo" value="1" /> Remove</label>
+            </div>
+          )}
+          <input type="file" name="photo" accept="image/jpeg,image/png,image/webp" />
+        </div>
+        <label class="field">Photo credit <input type="text" name="photo_credit" maxlength="120" value={team.photo_credit ?? ''} /></label>
+      </div>
+      <label class="field">Web address <span class="hint">/teams/...</span>
+        <input type="text" name="slug" maxlength="80" pattern="[a-z0-9\-]*" value={team.slug} />
+      </label>
+      <button type="submit" class="button">Save</button>
+    </form>
+
+    <form method="post" data-confirm={`Delete ${team.name}, its medals, stories and cheers? The players' own pages stay.`}>
+      <input type="hidden" name="action" value="delete" />
+      <button type="submit" class="button button-danger">Delete team</button>
+    </form>
+  </section>
+</AdminLayout>
+
+<style>
+  .plain { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+  .member { display: flex; flex-direction: column; gap: 6px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+  .note-form { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; }
+  .note-form .field { flex: 1; min-width: 200px; }
+  .add-member h3 { margin-top: 6px; }
+</style>

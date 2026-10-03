@@ -1,0 +1,20 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+Astro.response.status = 404;
+---
+
+<BaseLayout title="Page not found">
+  <section class="box">
+    <h1>This page isn't here.</h1>
+    <p class="muted">It may have moved, or the story isn't published yet.</p>
+    <div class="links">
+      <a href="/" class="button">Go to the home page</a>
+      <a href="/champions" class="button-outline">Meet the champions</a>
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  .box { padding-top: 48px; display: flex; flex-direction: column; gap: 14px; }
+  .links { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
+</style>

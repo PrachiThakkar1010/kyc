@@ -1,0 +1,127 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import Journey from '../../components/Journey.astro';
+import Reactions from '../../components/Reactions.astro';
+import ShareBar from '../../components/ShareBar.astro';
+import CheerWall from '../../components/CheerWall.astro';
+import { photoUrl } from '../../lib/supabase';
+import { readerClient } from '../../lib/reader';
+import { getCheers, getReactionCounts, getStoryBySlug, getSubjectMedals, getTeamPage, storySubject } from '../../lib/data';
+import { MEDAL_LABEL, prettyDate, readMinutes, todayIST } from '../../lib/format';
+
+const { db, preview } = await readerClient(Astro);
+const story = await getStoryBySlug(db, Astro.params.slug ?? '');
+if (!story) return Astro.rewrite('/404');
+
+const subject = storySubject(story);
+const stops = story.stops ?? [];
+const [medals, counts, cheers, team] = await Promise.all([
+  getSubjectMedals(db, story),
+  getReactionCounts(db, story.id),
+  story.team_id ? getCheers(db, 'team_id', story.team_id) : getCheers(db, 'champion_id', story.champion_id!),
+  story.team ? getTeamPage(db, story.team.slug) : Promise.resolve(null),
+]);
+
+const best = medals[0] ?? null;
+const cover = photoUrl(story.cover_path);
+const minutes = readMinutes([story.hook, ...stops.map((s) => s.body)]);
+const isToday = story.featured_on === todayIST();
+const firstName = subject.isTeam ? subject.name : subject.name.split(' ')[0];
+const description = story.hook || `${subject.name}: ${story.headline}`;
+
+Astro.response.headers.set('Cache-Control', preview ? 'private, no-store' : 'public, max-age=60');
+---
+
+<BaseLayout title={`${subject.name}: ${story.headline}`} description={description} image={cover} turnstile>
+  <article>
+    {
+      preview && (
+        <p class="notice ok preview">
+          Preview. Status: {story.status}{story.featured_on ? `, Story of the Day on ${prettyDate(story.featured_on)}` : ', no date chosen yet'}. <a href={`/admin/stories/${story.id}`}>Back to editing</a>
+        </p>
+      )
+    }
+    {
+      cover && (
+        <figure class="cover">
+          <img src={cover} alt={`${subject.name}`} />
+          {story.cover_credit && <figcaption>Photo: {story.cover_credit}</figcaption>}
+        </figure>
+      )
+    }
+
+    <header class="story-head">
+      <span class="kicker">{isToday ? 'Story of the day, ' : ''}{prettyDate(story.featured_on)}</span>
+      <h1><a href={subject.href}>{subject.name}</a></h1>
+      {
+        best && (
+          <div class="medal-line">
+            <span class={`medal-pill ${best.medal}`}>
+              <span class={`medal-dot ${best.medal}`} />
+              {MEDAL_LABEL[best.medal]}
+            </span>
+            <span class="muted">{best.sport}, {best.event}</span>
+            {medals.length > 1 && <span class="muted small">and {medals.length - 1} more {medals.length === 2 ? 'medal' : 'medals'}</span>}
+          </div>
+        )
+      }
+      <div class="byline small muted">
+        {story.author_name && <span>By {story.author_name}</span>}
+        <span>{minutes} min read</span>
+      </div>
+      <p class="headline story-text">{story.headline}</p>
+      {story.hook && <p class="hook story-text">{story.hook}</p>}
+    </header>
+
+    {
+      stops.length > 0 && (
+        <section class="section" aria-labelledby="journey-title">
+          <h2 id="journey-title">{subject.isTeam ? 'Their journey' : `${firstName}'s journey`}</h2>
+          <Journey stops={stops} />
+        </section>
+      )
+    }
+
+    <section class="respond">
+      <Reactions storyId={story.id} counts={counts} />
+      <ShareBar title={`${subject.name}: ${story.headline}`} text={`${story.headline} The journey of ${subject.name}, on KYC – Know Your Champions.`} label={`Share ${subject.isTeam ? 'their' : `${firstName}'s`} journey`} />
+    </section>
+  </article>
+
+  <CheerWall
+    subject={story.team_id ? 'team' : 'champion'}
+    subjectId={(story.team_id ?? story.champion_id)!}
+    name={firstName}
+    cheers={cheers}
+    members={team?.members.map((m) => ({ id: m.champion.id, name: m.champion.name })) ?? []}
+  />
+</BaseLayout>
+
+<style>
+  .preview { margin-top: 16px; }
+  .cover { margin: 0 -20px; }
+  .cover img { width: 100%; max-height: 460px; object-fit: cover; }
+  .cover figcaption { font-size: 12px; color: var(--muted); padding: 6px 20px 0; }
+  @media (min-width: 760px) {
+    .cover { margin: 20px 0 0; }
+    .cover img { border-radius: 18px; }
+    .cover figcaption { padding-left: 0; }
+  }
+  .story-head { padding-top: 24px; display: flex; flex-direction: column; gap: 14px; }
+  .kicker { font-size: 13px; font-weight: 600; color: var(--accent-ink); }
+  h1 { font-size: 38px; letter-spacing: -1px; }
+  h1 a { color: inherit; text-decoration: none; }
+  .medal-line { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 14px; }
+  .byline { display: flex; gap: 16px; }
+  .headline { font-size: 26px; line-height: 1.25; margin-top: 6px; }
+  .hook { font-size: 19px; line-height: 1.55; color: var(--muted); }
+  .respond {
+    margin-top: 12px;
+    padding: 20px;
+    border-radius: 16px;
+    background: var(--soft);
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+</style>

@@ -1,0 +1,132 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import ChampionTile from '../../components/ChampionTile.astro';
+import { publicClient } from '../../lib/supabase';
+import { getDirectory } from '../../lib/data';
+
+const directory = await getDirectory(publicClient());
+const sports = [...new Set(directory.map((e) => e.sport))].sort();
+const q = Astro.url.searchParams.get('q') ?? '';
+const sport = (Astro.url.searchParams.get('sport') ?? '').toLowerCase();
+const medal = (Astro.url.searchParams.get('medal') ?? '').toLowerCase();
+
+Astro.response.headers.set('Cache-Control', 'public, max-age=60');
+---
+
+<BaseLayout title="Meet the champions" description="Every Indian medallist at the Aichi-Nagoya 2026 Asian Games.">
+  <section class="head">
+    <h1>Meet the champions</h1>
+    <p class="muted">Every individual and team who won a medal for India.</p>
+  </section>
+
+  <div class="filters" data-initial-sport={sport} data-initial-medal={medal}>
+    <label class="field">
+      Find a champion
+      <input type="search" id="search" value={q} placeholder="Name, sport or state" autocomplete="off" />
+    </label>
+
+    <div class="chips" role="group" aria-label="Sport">
+      <button type="button" class="chip" data-sport="" aria-pressed="true">All sports</button>
+      {sports.map((s) => <button type="button" class="chip" data-sport={s.toLowerCase()} aria-pressed="false">{s}</button>)}
+    </div>
+
+    <div class="chips" role="group" aria-label="Medal">
+      <button type="button" class="chip" data-medal="" aria-pressed="true">All medals</button>
+      <button type="button" class="chip" data-medal="gold" aria-pressed="false"><span class="medal-dot gold"></span>Gold</button>
+      <button type="button" class="chip" data-medal="silver" aria-pressed="false"><span class="medal-dot silver"></span>Silver</button>
+      <button type="button" class="chip" data-medal="bronze" aria-pressed="false"><span class="medal-dot bronze"></span>Bronze</button>
+    </div>
+    <p class="muted small" id="result-count" role="status"></p>
+  </div>
+
+  <div class="champ-grid">
+    {directory.map((e) => <ChampionTile entry={e} />)}
+  </div>
+  <p class="none muted" hidden>No champions match that search. Try a different name or sport.</p>
+</BaseLayout>
+
+<style>
+  .head { padding-top: 28px; margin-bottom: 20px; }
+  .head p { margin-top: 10px; }
+  .filters { display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px; }
+  .chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
+  .chip {
+    flex-shrink: 0;
+    min-height: 40px;
+    padding: 0 14px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: var(--bg);
+    color: var(--ink);
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+  }
+  .chip[aria-pressed='true'] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+  .champ-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  @media (min-width: 640px) {
+    .champ-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  }
+  .none { margin-top: 20px; }
+</style>
+
+<script>
+  // Filters the tiles in the browser as you type or tap a chip.
+  const tiles = Array.from(document.querySelectorAll<HTMLElement>('.champ-grid .tile'));
+  const search = document.querySelector<HTMLInputElement>('#search')!;
+  const filters = document.querySelector<HTMLElement>('.filters')!;
+  const countEl = document.querySelector('#result-count')!;
+  const none = document.querySelector<HTMLElement>('.none')!;
+  let sport = filters.dataset.initialSport ?? '';
+  let medal = filters.dataset.initialMedal ?? '';
+
+  function press(attr: 'sport' | 'medal', value: string) {
+    filters.querySelectorAll<HTMLButtonElement>(`[data-${attr}]`).forEach((b) => {
+      b.setAttribute('aria-pressed', String(b.dataset[attr] === value));
+    });
+  }
+
+  function apply() {
+    const words = search.value.toLowerCase().trim().split(/\s+/).filter(Boolean);
+    let shown = 0;
+    for (const tile of tiles) {
+      const ok =
+        words.every((w) => tile.dataset.search!.includes(w)) &&
+        (!sport || tile.dataset.sport === sport) &&
+        (!medal || tile.dataset.medals!.split(' ').includes(medal));
+      tile.hidden = !ok;
+      if (ok) shown++;
+    }
+    countEl.textContent = `${shown} ${shown === 1 ? 'champion' : 'champions'}`;
+    none.hidden = shown > 0;
+    const params = new URLSearchParams();
+    if (search.value.trim()) params.set('q', search.value.trim());
+    if (sport) params.set('sport', sport);
+    if (medal) params.set('medal', medal);
+    history.replaceState(null, '', params.size ? `?${params}` : location.pathname);
+  }
+
+  filters.querySelectorAll<HTMLButtonElement>('[data-sport]').forEach((b) =>
+    b.addEventListener('click', () => {
+      sport = b.dataset.sport ?? '';
+      press('sport', sport);
+      apply();
+    }),
+  );
+  filters.querySelectorAll<HTMLButtonElement>('[data-medal]').forEach((b) =>
+    b.addEventListener('click', () => {
+      medal = b.dataset.medal ?? '';
+      press('medal', medal);
+      apply();
+    }),
+  );
+  search.addEventListener('input', apply);
+
+  press('sport', sport);
+  press('medal', medal);
+  apply();
+</script>

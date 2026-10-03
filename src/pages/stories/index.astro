@@ -1,0 +1,39 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import StoryRow from '../../components/StoryRow.astro';
+import { publicClient } from '../../lib/supabase';
+import { getDirectory, getStories } from '../../lib/data';
+
+const db = publicClient();
+const [stories, directory] = await Promise.all([getStories(db), getDirectory(db)]);
+const medalOf = (s: { champion_id: string | null; team_id: string | null }) =>
+  directory.find((e) => e.id === (s.champion_id ?? s.team_id))?.medals[0] ?? null;
+
+Astro.response.headers.set('Cache-Control', 'public, max-age=60');
+---
+
+<BaseLayout title="All stories" description="Every KYC story so far, newest first.">
+  <section class="head">
+    <h1>All stories</h1>
+    <p class="muted">One champion's journey every day, newest first.</p>
+  </section>
+
+  {
+    stories.length ? (
+      <ul class="list">
+        {stories.map((s) => (
+          <StoryRow story={s} medal={medalOf(s)} />
+        ))}
+      </ul>
+    ) : (
+      <p class="empty muted">The first story is on its way. <a href="/champions">Meet the champions</a> meanwhile.</p>
+    )
+  }
+</BaseLayout>
+
+<style>
+  .head { padding-top: 28px; margin-bottom: 20px; }
+  .head p { margin-top: 10px; }
+  .list { margin: 0; padding: 0; }
+  .empty { margin-top: 20px; }
+</style>

@@ -1,0 +1,110 @@
+---
+// The vertical journey on a story page. As the reader scrolls,
+// the road fills in behind them.
+import type { Stop } from '../lib/types';
+import { STOP_LABEL, paragraphs } from '../lib/format';
+import { photoUrl } from '../lib/supabase';
+
+interface Props {
+  stops: Stop[];
+}
+const { stops } = Astro.props;
+---
+
+<ol class="journey">
+  {
+    stops.map((stop, i) => {
+      const photo = photoUrl(stop.photo_path);
+      return (
+        <li class={`stop ${stop.kind}`} id={`stop-${i + 1}`}>
+          <div class="rail" aria-hidden="true">
+            <span class="marker" />
+            {i < stops.length - 1 && <span class="segment" />}
+          </div>
+          <div class="content">
+            <span class="kind">{STOP_LABEL[stop.kind]}</span>
+            <h3>{stop.title}</h3>
+            {stop.place && <span class="place">{stop.place}</span>}
+            {photo && (
+              <figure>
+                <img src={photo} alt="" loading="lazy" />
+                {stop.photo_credit && <figcaption>Photo: {stop.photo_credit}</figcaption>}
+              </figure>
+            )}
+            <div class="body">
+              {paragraphs(stop.body).map((p) => (
+                <p>{p}</p>
+              ))}
+            </div>
+          </div>
+        </li>
+      );
+    })
+  }
+</ol>
+
+<style>
+  .journey { list-style: none; margin: 20px 0 0; padding: 0; }
+  .stop { display: flex; gap: 16px; }
+  .rail { width: 26px; flex-shrink: 0; display: flex; flex-direction: column; align-items: center; }
+
+  .marker {
+    width: 16px; height: 16px;
+    margin-top: 4px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    background: var(--bg);
+    border: 3px solid var(--line);
+    transition: background-color 0.3s, border-color 0.3s;
+  }
+  .segment {
+    flex: 1;
+    width: 0;
+    margin-top: 6px;
+    border-left: 3px solid var(--line);
+    transition: border-color 0.3s;
+  }
+
+  /* Reached stops fill in with the road colour */
+  .stop.reached .marker { background: var(--accent); border-color: var(--accent); }
+  .stop.reached .segment { border-color: var(--accent); }
+
+  /* Setbacks: hollow dashed circle, dashed road */
+  .stop.setback .marker { border: 2px dashed var(--setback); background: var(--bg); }
+  .stop.setback .segment, .stop.reached.setback .segment { border-left-style: dashed; border-color: var(--setback); }
+  .stop.reached.setback .marker { background: var(--bg); border-color: var(--muted); }
+
+  /* The podium */
+  .stop.podium .marker { width: 26px; height: 26px; margin-top: 0; background: var(--gold); border: 5px solid var(--gold-bg); }
+
+  .content { flex: 1; min-width: 0; padding-bottom: 36px; display: flex; flex-direction: column; gap: 6px; }
+  .kind { font-size: 12px; font-weight: 600; color: var(--accent-ink); }
+  .setback .kind { color: var(--muted); }
+  .podium .kind { color: var(--gold-ink); }
+  h3 { font-size: 21px; line-height: 1.2; }
+  .place { font-size: 13px; color: var(--muted); }
+  figure { margin-top: 8px; }
+  figure img { border-radius: 12px; width: 100%; }
+  figcaption { font-size: 12px; color: var(--muted); margin-top: 6px; }
+  .body { margin-top: 6px; display: flex; flex-direction: column; gap: 14px; font-family: var(--font-story); font-size: 17px; line-height: 1.75; }
+</style>
+
+<script>
+  // Mark each stop as "reached" once it scrolls into the middle of the screen.
+  const stops = Array.from(document.querySelectorAll<HTMLElement>('.journey .stop'));
+  if ('IntersectionObserver' in window && stops.length) {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue;
+          const index = stops.indexOf(entry.target as HTMLElement);
+          stops.forEach((s, i) => s.classList.toggle('reached', i <= index));
+        }
+      },
+      { rootMargin: '0px 0px -45% 0px' },
+    );
+    stops.forEach((s) => observer.observe(s));
+  } else {
+    stops.forEach((s) => s.classList.add('reached'));
+  }
+</script>

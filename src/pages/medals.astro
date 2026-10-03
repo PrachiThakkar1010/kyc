@@ -1,0 +1,59 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { publicClient } from '../lib/supabase';
+import { getAllMedals, getTally } from '../lib/data';
+import { MEDAL_LABEL, prettyDate } from '../lib/format';
+import type { MedalKind } from '../lib/types';
+
+const db = publicClient();
+const [medals, tally] = await Promise.all([getAllMedals(db), getTally(db)]);
+const kinds: MedalKind[] = ['gold', 'silver', 'bronze'];
+
+Astro.response.headers.set('Cache-Control', 'public, max-age=60');
+---
+
+<BaseLayout title="All medals" description={`All ${tally.total} medals India won at the Aichi-Nagoya 2026 Asian Games.`}>
+  <section class="head">
+    <h1>All {tally.total} medals</h1>
+    <p class="muted">{tally.asOf ? `As of ${tally.asOf}. ` : ''}Tap a name to meet the champion.</p>
+  </section>
+
+  {
+    kinds.map((k) => (
+      <section class="section" id={k} aria-labelledby={`${k}-title`}>
+        <h2 id={`${k}-title`} class="group-title">
+          <span class={`medal-dot ${k}`} />
+          {MEDAL_LABEL[k]} <span class="muted">{tally.counts[k]}</span>
+        </h2>
+        <ul class="list">
+          {medals
+            .filter((m) => m.medal === k)
+            .map((m) => {
+              const who = m.team ?? m.champion;
+              const href = m.team ? `/teams/${m.team.slug}` : `/champions/${m.champion?.slug}`;
+              return (
+                <li>
+                  <a href={href} class="who">{who?.name}</a>
+                  <span class="muted small">
+                    {m.sport}, {m.event}
+                    {m.won_on ? ` · ${prettyDate(m.won_on)}` : ''}
+                  </span>
+                </li>
+              );
+            })}
+        </ul>
+      </section>
+    ))
+  }
+</BaseLayout>
+
+<style>
+  .head { padding-top: 28px; }
+  .head p { margin-top: 10px; }
+  .group-title { display: flex; align-items: center; gap: 10px; }
+  .group-title .medal-dot { width: 16px; height: 16px; }
+  .list { list-style: none; margin: 12px 0 0; padding: 0; }
+  .list li { padding: 12px 0; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 2px; }
+  .who { font-weight: 600; color: var(--ink); }
+  section { scroll-margin-top: 16px; }
+</style>

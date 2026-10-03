@@ -1,0 +1,55 @@
+---
+interface Props {
+  title: string;
+  text: string;
+  label: string;
+}
+const { title, text, label } = Astro.props;
+const url = Astro.url.href;
+const whatsapp = `https://wa.me/?text=${encodeURIComponent(`${text}\n${url}`)}`;
+---
+
+<div class="share" data-title={title} data-text={text} data-url={url}>
+  <button type="button" class="button wide share-button">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"></path></svg>
+    {label}
+  </button>
+  <div class="more">
+    <a class="button-outline" href={whatsapp} target="_blank" rel="noopener">Send on WhatsApp</a>
+    <button type="button" class="button-outline copy-button">Copy link</button>
+  </div>
+  <p class="status small muted" role="status"></p>
+</div>
+
+<style>
+  .share { display: flex; flex-direction: column; gap: 10px; }
+  .more { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .status:empty { display: none; }
+</style>
+
+<script>
+  document.querySelectorAll<HTMLElement>('.share').forEach((box) => {
+    const { title, text, url } = box.dataset as { title: string; text: string; url: string };
+    const status = box.querySelector('.status')!;
+
+    async function copy() {
+      try {
+        await navigator.clipboard.writeText(url);
+        status.textContent = 'Link copied. Paste it anywhere to share.';
+      } catch {
+        status.textContent = url;
+      }
+    }
+
+    box.querySelector('.share-button')?.addEventListener('click', async () => {
+      if (navigator.share) {
+        try {
+          await navigator.share({ title, text, url });
+        } catch {}
+      } else {
+        await copy();
+      }
+    });
+    box.querySelector('.copy-button')?.addEventListener('click', copy);
+  });
+</script>

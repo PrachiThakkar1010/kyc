@@ -1,0 +1,130 @@
+---
+// Admin only (the middleware blocks everyone else).
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { adminClient } from '../../lib/supabase';
+import { temporaryPassword, withMessage } from '../../lib/admin';
+import { isUuid, text } from '../../lib/http';
+import type { Profile } from '../../lib/types';
+
+const me = Astro.locals.profile;
+const admin = adminClient();
+let error = '';
+let created: { email: string; password: string; reset?: boolean } | null = null;
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const action = text(form, 'action');
+  const id = text(form, 'id');
+
+  if (action === 'create') {
+    const name = text(form, 'name', 80);
+    const email = text(form, 'email', 200).toLowerCase();
+    if (!name || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      error = 'Enter the writer\'s name and a valid email.';
+    } else {
+      const password = temporaryPassword();
+      const { data, error: e } = await admin.auth.admin.createUser({ email, password, email_confirm: true, user_metadata: { display_name: name } });
+      if (e || !data.user) {
+        error = e?.message?.includes('already') ? 'An account with that email already exists.' : e?.message ?? 'The account could not be created.';
+      } else {
+        const { error: pe } = await admin.from('profiles').insert({ id: data.user.id, display_name: name, email, role: 'writer', must_change_password: true });
+        if (pe) {
+          await admin.auth.admin.deleteUser(data.user.id);
+          error = pe.message;
+        } else {
+          created = { email, password };
+        }
+      }
+    }
+  } else if (isUuid(id) && id === me.id) {
+    error = 'You cannot change your own account here.';
+  } else if (isUuid(id) && action === 'reset') {
+    const password = temporaryPassword();
+    const { error: e } = await admin.auth.admin.updateUserById(id, { password });
+    if (e) error = e.message;
+    else {
+      const { data: p } = await admin.from('profiles').update({ must_change_password: true }).eq('id', id).select('email').single();
+      created = { email: p?.email ?? '', password, reset: true };
+    }
+  } else if (isUuid(id) && (action === 'deactivate' || action === 'activate')) {
+    const active = action === 'activate';
+    // A long ban ends their current login; "none" lifts it.
+    const { error: e } = await admin.auth.admin.updateUserById(id, { ban_duration: active ? 'none' : '876000h' });
+    if (e) error = e.message;
+    else {
+      await admin.from('profiles').update({ active }).eq('id', id);
+      return Astro.redirect(withMessage('/admin/writers', active ? 'Writer switched back on.' : 'Writer switched off. Their stories stay published.'));
+    }
+  }
+}
+
+const { data } = await admin.from('profiles').select('*').order('created_at');
+const writers = (data ?? []) as Profile[];
+---
+
+<AdminLayout title="Writers" wide>
+  <section class="admin-page">
+    <h1>Writers</h1>
+    {error && <p class="notice error" role="alert">{error}</p>}
+
+    {
+      created && (
+        <div class="notice ok credentials">
+          <p><strong>{created.reset ? 'New temporary password' : 'Account created'}.</strong> Send these details to the writer yourself. This password is shown only once.</p>
+          <p>Login page: <code>{Astro.url.origin}/admin/login</code></p>
+          <p>Email: <code>{created.email}</code></p>
+          <p>Temporary password: <code>{created.password}</code></p>
+          <p class="small">They will be asked to choose their own password when they first log in.</p>
+        </div>
+      )
+    }
+
+    <form method="post" class="panel">
+      <h2>Add a writer</h2>
+      <input type="hidden" name="action" value="create" />
+      <div class="two">
+        <label class="field">Name <span class="hint">Shown as the byline on their stories</span><input type="text" name="name" required maxlength="80" /></label>
+        <label class="field">Email <input type="email" name="email" required maxlength="200" /></label>
+      </div>
+      <button type="submit" class="button">Create account</button>
+    </form>
+
+    <div class="table-wrap">
+      <table class="table">
+        <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th></th></tr></thead>
+        <tbody>
+          {writers.map((w) => (
+            <tr>
+              <td>{w.display_name}{w.id === me.id && <span class="muted"> (you)</span>}</td>
+              <td>{w.email}</td>
+              <td>{w.role === 'admin' ? 'Admin' : 'Writer'}</td>
+              <td>
+                <span class={`tag ${w.active ? 'visible' : 'hidden'}`}>{w.active ? 'Active' : 'Switched off'}</span>
+                {w.must_change_password && w.active && <span class="tag pending">Hasn't logged in yet</span>}
+              </td>
+              <td>
+                {w.id !== me.id && (
+                  <div class="actions">
+                    <form method="post" class="inline" data-confirm={`Give ${w.display_name} a new temporary password?`}>
+                      <input type="hidden" name="id" value={w.id} />
+                      <button name="action" value="reset" class="button-quiet">New password</button>
+                    </form>
+                    <form method="post" class="inline" data-confirm={w.active ? `Switch off ${w.display_name}'s account?` : `Switch ${w.display_name}'s account back on?`}>
+                      <input type="hidden" name="id" value={w.id} />
+                      <button name="action" value={w.active ? 'deactivate' : 'activate'} class="button-quiet">{w.active ? 'Switch off' : 'Switch on'}</button>
+                    </form>
+                  </div>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</AdminLayout>
+
+<style>
+  .credentials { display: flex; flex-direction: column; gap: 6px; }
+  code { font-size: 15px; user-select: all; }
+</style>

@@ -1,0 +1,119 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import MedalTally from '../components/MedalTally.astro';
+import StoryOfDay from '../components/StoryOfDay.astro';
+import StoryRow from '../components/StoryRow.astro';
+import ChampionTile from '../components/ChampionTile.astro';
+import { publicClient, photoUrl } from '../lib/supabase';
+import { getDirectory, getStories, getTally } from '../lib/data';
+import type { MedalKind } from '../lib/types';
+
+const db = publicClient();
+const [tally, stories, directory] = await Promise.all([getTally(db), getStories(db, 4), getDirectory(db)]);
+
+// Each story's best medal, from the directory we already loaded.
+const bestMedalOf = (s: { champion_id: string | null; team_id: string | null }): MedalKind | null =>
+  directory.find((e) => e.id === (s.champion_id ?? s.team_id))?.medals[0] ?? null;
+
+const [today, ...earlier] = stories;
+const sports = [...new Set(directory.map((e) => e.sport))].sort().slice(0, 8);
+const featured = directory.slice(0, 4);
+
+Astro.response.headers.set('Cache-Control', 'public, max-age=60');
+---
+
+<BaseLayout title="KYC – Know Your Champions" image={photoUrl(today?.cover_path)}>
+  <section class="intro">
+    <h1>{tally.total} medals. Every one has a story.</h1>
+    <p>Meet the people who won them for India at the Aichi-Nagoya 2026 Asian Games, one journey at a time.</p>
+  </section>
+
+  <MedalTally counts={tally.counts} asOf={tally.asOf} note={tally.note} />
+
+  <section class="section">
+    {
+      today ? (
+        <StoryOfDay story={today} medal={bestMedalOf(today)} />
+      ) : (
+        <div class="first-story">
+          <p class="kicker">Story of the day</p>
+          <p class="headline">The first story is on its way.</p>
+          <p class="muted">Meanwhile, meet the champions below.</p>
+        </div>
+      )
+    }
+  </section>
+
+  {
+    earlier.length > 0 && (
+      <section class="section" aria-labelledby="earlier-title">
+        <div class="section-head">
+          <h2 id="earlier-title">Earlier stories</h2>
+          <a href="/stories" class="small">All stories</a>
+        </div>
+        <ul class="story-list">
+          {earlier.map((s) => (
+            <StoryRow story={s} medal={bestMedalOf(s)} />
+          ))}
+        </ul>
+      </section>
+    )
+  }
+
+  <section class="section" aria-labelledby="champions-title">
+    <h2 id="champions-title">Meet the champions</h2>
+
+    <form action="/champions" method="get" class="search">
+      <label class="field">
+        Find a champion
+        <input type="search" name="q" placeholder="Name, sport or state" />
+      </label>
+    </form>
+
+    <div class="chips">
+      <a href="/champions" class="chip is-active">All</a>
+      {sports.map((s) => <a href={`/champions?sport=${encodeURIComponent(s.toLowerCase())}`} class="chip">{s}</a>)}
+    </div>
+
+    <div class="champ-grid">
+      {featured.map((e) => <ChampionTile entry={e} />)}
+    </div>
+
+    <a href="/champions" class="button-outline wide see-all">See all champions</a>
+  </section>
+</BaseLayout>
+
+<style>
+  .intro { padding-top: 28px; }
+  .intro p { margin-top: 12px; font-size: 15px; color: var(--muted); }
+
+  .first-story { padding: 28px 20px; border-radius: 22px; background: var(--card); color: var(--card-ink); }
+  .kicker { font-size: 13px; font-weight: 700; color: var(--card-muted); }
+  .headline { font-family: var(--font-story); font-size: 28px; margin: 8px 0; }
+  .first-story .muted { color: var(--card-muted); }
+
+  .story-list { margin: 0; padding: 0; }
+
+  .search { margin-top: 14px; }
+  .chips { display: flex; gap: 8px; margin: 14px 0; overflow-x: auto; padding-bottom: 4px; }
+  .chip {
+    flex-shrink: 0;
+    min-height: 40px;
+    padding: 0 16px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    color: var(--ink);
+    font-size: 14px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    text-decoration: none;
+  }
+  .chip.is-active { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+
+  .champ-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  @media (min-width: 640px) {
+    .champ-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  }
+  .see-all { margin-top: 14px; }
+</style>

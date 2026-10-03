@@ -1,0 +1,43 @@
+---
+import MiniRoad from './MiniRoad.astro';
+import type { MedalKind, Story } from '../lib/types';
+import { storySubject } from '../lib/data';
+import { prettyDate } from '../lib/format';
+
+interface Props {
+  story: Story;
+  medal: MedalKind | null;
+}
+const { story, medal } = Astro.props;
+const subject = storySubject(story);
+---
+
+<li>
+  <a href={`/stories/${story.slug}`} class="row">
+    <MiniRoad kinds={(story.stops ?? []).map((s) => s.kind)} medal={medal} />
+    <span class="title">{story.headline}</span>
+    <span class="who">
+      {medal && <span class={`medal-dot ${medal}`} />}
+      {subject.name}, {subject.sport.toLowerCase()}
+    </span>
+    {story.featured_on && <span class="date">{prettyDate(story.featured_on)}</span>}
+  </a>
+</li>
+
+<style>
+  li { list-style: none; }
+  .row {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 16px 0;
+    border-top: 1px solid var(--line);
+    color: var(--ink);
+    text-decoration: none;
+  }
+  .title { font-family: var(--font-story); font-size: 19px; line-height: 1.3; }
+  .row:hover .title { text-decoration: underline; }
+  .who { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+  .who .medal-dot { width: 9px; height: 9px; }
+  .date { font-size: 12px; color: var(--muted); }
+</style>

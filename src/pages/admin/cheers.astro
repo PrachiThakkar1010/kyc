@@ -1,0 +1,116 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { friendlyError, withMessage } from '../../lib/admin';
+import { isUuid, text } from '../../lib/http';
+import { prettyDate } from '../../lib/format';
+
+const db = Astro.locals.supabase;
+const tabs = [
+  { status: 'pending', label: 'Needs review' },
+  { status: 'visible', label: 'Live' },
+  { status: 'hidden', label: 'Hidden' },
+];
+const status = tabs.some((t) => t.status === Astro.url.searchParams.get('status')) ? Astro.url.searchParams.get('status')! : 'pending';
+const here = `/admin/cheers?status=${status}`;
+let error = '';
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const id = text(form, 'id');
+  const action = text(form, 'action');
+  if (isUuid(id)) {
+    const { error: e } =
+      action === 'delete'
+        ? await db.from('cheers').delete().eq('id', id)
+        : await db.from('cheers').update({ status: action === 'approve' ? 'visible' : 'hidden' }).eq('id', id);
+    if (e) error = friendlyError(e);
+    else {
+      const done = { approve: 'Approved. It is live on the wall.', hide: 'Hidden from the wall.', delete: 'Deleted.' }[action] ?? 'Done.';
+      return Astro.redirect(withMessage(here, done));
+    }
+  }
+}
+
+const [{ data: cheers }, ...counts] = await Promise.all([
+  db
+    .from('cheers')
+    .select('id, name, city, message, status, flag_reason, report_count, created_at, champion:champions!cheers_champion_id_fkey(name, slug), team:teams(name, slug)')
+    .eq('status', status)
+    .order('created_at', { ascending: false })
+    .limit(200),
+  ...tabs.map((t) => db.from('cheers').select('id', { count: 'exact', head: true }).eq('status', t.status)),
+]);
+
+type Row = {
+  id: string; name: string; city: string | null; message: string; status: string;
+  flag_reason: string | null; report_count: number; created_at: string;
+  champion: { name: string; slug: string } | null; team: { name: string; slug: string } | null;
+};
+const rows = (cheers ?? []) as unknown as Row[];
+---
+
+<AdminLayout title="Cheers" wide>
+  <section class="admin-page">
+    <h1>Cheers</h1>
+    <p class="muted small">
+      Messages go live straight away unless the automatic filter catches something, or three visitors report them. Those wait here for you.
+    </p>
+    {error && <p class="notice error" role="alert">{error}</p>}
+
+    <nav class="tabs" aria-label="Cheer status">
+      {tabs.map((t, i) => (
+        <a href={`/admin/cheers?status=${t.status}`} aria-current={t.status === status ? 'page' : undefined}>
+          {t.label} ({counts[i]?.count ?? 0})
+        </a>
+      ))}
+    </nav>
+
+    {rows.length === 0 && <p class="muted">Nothing here.</p>}
+
+    <ul class="plain">
+      {rows.map((c) => {
+        const subject = c.champion ?? c.team;
+        const href = c.champion ? `/champions/${c.champion.slug}` : `/teams/${c.team?.slug}`;
+        return (
+          <li class="panel">
+            <p class="story-text">{c.message}</p>
+            <p class="small muted">
+              {c.name}{c.city ? `, ${c.city}` : ''} · for <a href={href} target="_blank" rel="noopener">{subject?.name}</a> · {prettyDate(c.created_at.slice(0, 10))}
+            </p>
+            {(c.flag_reason || c.report_count > 0) && (
+              <p class="small">
+                {c.flag_reason && <span class="tag pending">{c.flag_reason}</span>}{' '}
+                {c.report_count > 0 && <span class="tag hidden">{c.report_count} {c.report_count === 1 ? 'report' : 'reports'}</span>}
+              </p>
+            )}
+            <div class="actions">
+              {c.status !== 'visible' && (
+                <form method="post" class="inline">
+                  <input type="hidden" name="id" value={c.id} />
+                  <button name="action" value="approve" class="button">Approve</button>
+                </form>
+              )}
+              {c.status !== 'hidden' && (
+                <form method="post" class="inline">
+                  <input type="hidden" name="id" value={c.id} />
+                  <button name="action" value="hide" class="button-outline">Hide</button>
+                </form>
+              )}
+              <form method="post" class="inline" data-confirm="Delete this message for good?">
+                <input type="hidden" name="id" value={c.id} />
+                <button name="action" value="delete" class="button-quiet">Delete</button>
+              </form>
+            </div>
+          </li>
+        );
+      })}
+    </ul>
+  </section>
+</AdminLayout>
+
+<style>
+  .tabs { display: flex; gap: 8px; flex-wrap: wrap; }
+  .tabs a { padding: 8px 14px; border-radius: 999px; border: 1px solid var(--line); color: var(--ink); text-decoration: none; font-size: 14px; font-weight: 600; }
+  .tabs a[aria-current='page'] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+  .plain { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+</style>

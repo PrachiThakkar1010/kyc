@@ -1,0 +1,74 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { friendlyError, withMessage } from '../../lib/admin';
+import { isUuid, text } from '../../lib/http';
+import { prettyDate } from '../../lib/format';
+
+const db = Astro.locals.supabase;
+const showResolved = Astro.url.searchParams.get('show') === 'resolved';
+const here = showResolved ? '/admin/feedback?show=resolved' : '/admin/feedback';
+let error = '';
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const id = text(form, 'id');
+  const action = text(form, 'action');
+  if (isUuid(id)) {
+    const { error: e } =
+      action === 'delete'
+        ? await db.from('feedback').delete().eq('id', id)
+        : await db.from('feedback').update({ status: action === 'resolve' ? 'resolved' : 'new' }).eq('id', id);
+    if (e) error = friendlyError(e);
+    else return Astro.redirect(withMessage(here, action === 'resolve' ? 'Marked as done.' : action === 'delete' ? 'Deleted.' : 'Moved back to new.'));
+  }
+}
+
+const { data } = await db
+  .from('feedback')
+  .select('*')
+  .eq('status', showResolved ? 'resolved' : 'new')
+  .order('created_at', { ascending: false })
+  .limit(300);
+const labels: Record<string, string> = { correction: 'Correction', tip: 'Story tip', suggestion: 'Suggestion', other: 'Other' };
+---
+
+<AdminLayout title="Feedback" wide>
+  <section class="admin-page">
+    <h1>Corrections and tips</h1>
+    <p class="small">
+      {showResolved ? <a href="/admin/feedback">Show new messages</a> : <a href="/admin/feedback?show=resolved">Show messages marked as done</a>}
+    </p>
+    {error && <p class="notice error" role="alert">{error}</p>}
+    {(data ?? []).length === 0 && <p class="muted">{showResolved ? 'Nothing marked as done yet.' : 'No new messages. You are all caught up.'}</p>}
+
+    <ul class="plain">
+      {(data ?? []).map((f) => (
+        <li class="panel">
+          <p class="small"><span class="tag new">{labels[f.kind] ?? f.kind}</span> <span class="muted">{prettyDate(f.created_at.slice(0, 10))}</span></p>
+          <p class="message">{f.message}</p>
+          <p class="small muted">
+            {f.page_path && <>About <a href={f.page_path} target="_blank" rel="noopener">{f.page_path}</a>. </>}
+            {f.email ? <>Reply to <a href={`mailto:${f.email}`}>{f.email}</a></> : 'No email given.'}
+          </p>
+          <div class="actions">
+            <form method="post" class="inline">
+              <input type="hidden" name="id" value={f.id} />
+              {showResolved
+                ? <button name="action" value="reopen" class="button-outline">Move back to new</button>
+                : <button name="action" value="resolve" class="button">Mark as done</button>}
+            </form>
+            <form method="post" class="inline" data-confirm="Delete this message?">
+              <input type="hidden" name="id" value={f.id} />
+              <button name="action" value="delete" class="button-quiet">Delete</button>
+            </form>
+          </div>
+        </li>
+      ))}
+    </ul>
+  </section>
+</AdminLayout>
+
+<style>
+  .plain { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+  .message { white-space: pre-wrap; overflow-wrap: anywhere; }
+</style>

@@ -1,0 +1,127 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import Avatar from '../../components/Avatar.astro';
+import OnItsWay from '../../components/OnItsWay.astro';
+import CheerWall from '../../components/CheerWall.astro';
+import { publicClient, photoUrl } from '../../lib/supabase';
+import { getTeamPage } from '../../lib/data';
+import { MEDAL_LABEL, paragraphs, prettyDate } from '../../lib/format';
+
+const page = await getTeamPage(publicClient(), Astro.params.slug ?? '');
+if (!page) return Astro.rewrite('/404');
+const { team, members, medals, story, cheers } = page;
+const photo = photoUrl(team.photo_path);
+
+Astro.response.headers.set('Cache-Control', 'public, max-age=60');
+---
+
+<BaseLayout title={team.name} description={`${team.name}, ${team.sport}. Medal winners for India at the Aichi-Nagoya 2026 Asian Games.`} image={photo} turnstile>
+  {
+    photo && (
+      <figure class="cover">
+        <img src={photo} alt={team.name} />
+        {team.photo_credit && <figcaption>Photo: {team.photo_credit}</figcaption>}
+      </figure>
+    )
+  }
+
+  <header class="head">
+    <p class="kicker small">{team.sport}</p>
+    <h1>{team.name}</h1>
+    <ul class="medals">
+      {
+        medals.map((m) => (
+          <li>
+            <span class={`medal-pill ${m.medal}`}>
+              <span class={`medal-dot ${m.medal}`} />
+              {MEDAL_LABEL[m.medal]}
+            </span>
+            <span>{m.event}</span>
+            {m.won_on && <span class="muted small">{prettyDate(m.won_on)}</span>}
+          </li>
+        ))
+      }
+    </ul>
+  </header>
+
+  {
+    team.bio && (
+      <section class="section bio story-text">
+        {paragraphs(team.bio).map((p) => <p>{p}</p>)}
+      </section>
+    )
+  }
+
+  <section class="section">
+    {
+      story ? (
+        <a href={`/stories/${story.slug}`} class="story-link">
+          <span class="small kicker-light">Read the team's journey</span>
+          <span class="story-text title">{story.headline}</span>
+          <span class="small light">{prettyDate(story.featured_on)}</span>
+        </a>
+      ) : (
+        <OnItsWay medal={medals[0]?.medal ?? null} name="the team" />
+      )
+    }
+  </section>
+
+  <section class="section" aria-labelledby="players-title">
+    <h2 id="players-title">The players</h2>
+    {
+      members.length ? (
+        <ul class="players">
+          {members.map((m) => (
+            <li>
+              <a href={`/champions/${m.champion.slug}`} class="player">
+                <Avatar name={m.champion.name} path={m.champion.photo_path} size={52} />
+                <span>
+                  <span class="player-name">{m.champion.name}</span>
+                  {m.note && <span class="player-note muted">{m.note}</span>}
+                </span>
+              </a>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p class="muted">The squad list is being added. <a href={`/feedback?kind=tip&page=${encodeURIComponent(Astro.url.pathname)}`}>Know the players? Tell us.</a></p>
+      )
+    }
+  </section>
+
+  <CheerWall
+    subject="team"
+    subjectId={team.id}
+    name="the team"
+    cheers={cheers}
+    members={members.map((m) => ({ id: m.champion.id, name: m.champion.name }))}
+  />
+</BaseLayout>
+
+<style>
+  .cover { margin: 0 -20px; }
+  .cover img { width: 100%; max-height: 420px; object-fit: cover; }
+  .cover figcaption { font-size: 12px; color: var(--muted); padding: 6px 20px 0; }
+  @media (min-width: 760px) {
+    .cover { margin: 20px 0 0; }
+    .cover img { border-radius: 18px; }
+  }
+  .head { padding-top: 24px; display: flex; flex-direction: column; gap: 12px; }
+  .kicker { color: var(--accent-ink); font-weight: 600; }
+  .medals { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+  .medals li { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .bio { display: flex; flex-direction: column; gap: 14px; font-size: 17px; line-height: 1.7; }
+  .story-link {
+    display: flex; flex-direction: column; gap: 8px;
+    padding: 20px; border-radius: 16px;
+    background: var(--card); color: var(--card-ink); text-decoration: none;
+  }
+  .kicker-light, .light { color: var(--card-muted); }
+  .kicker-light { font-weight: 700; }
+  .story-link .title { font-size: 24px; line-height: 1.25; }
+  .players { list-style: none; margin: 14px 0 0; padding: 0; display: flex; flex-direction: column; }
+  .player { display: flex; align-items: center; gap: 14px; padding: 12px 0; border-top: 1px solid var(--line); color: var(--ink); text-decoration: none; }
+  .player > span { display: flex; flex-direction: column; gap: 2px; }
+  .player-name { font-weight: 600; }
+  .player-note { font-size: 14px; }
+</style>

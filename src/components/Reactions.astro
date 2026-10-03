@@ -1,0 +1,87 @@
+---
+interface Props {
+  storyId: string;
+  counts: Record<string, number>;
+}
+const { storyId, counts } = Astro.props;
+const options = [
+  { kind: 'proud', emoji: '👏', label: 'Proud' },
+  { kind: 'inspired', emoji: '🏃', label: 'Inspired' },
+  { kind: 'respect', emoji: '🫡', label: 'Respect' },
+];
+---
+
+<div class="reactions" data-story={storyId}>
+  <p class="question">How does this story make you feel?</p>
+  <div class="buttons">
+    {
+      options.map((o) => (
+        <button type="button" class="reaction" data-kind={o.kind} aria-pressed="false">
+          <span class="emoji" aria-hidden="true">{o.emoji}</span>
+          <span>{o.label}</span>
+          <span class="count" data-count>{counts[o.kind] || ''}</span>
+        </button>
+      ))
+    }
+  </div>
+</div>
+
+<style>
+  .question { font-size: 16px; font-weight: 600; }
+  .buttons { display: flex; gap: 8px; margin-top: 14px; }
+  .reaction {
+    flex: 1;
+    min-height: 80px;
+    border-radius: 12px;
+    border: 1px solid var(--line);
+    background: var(--bg);
+    color: var(--ink);
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    cursor: pointer;
+  }
+  .reaction[aria-pressed='true'] { border-color: var(--accent); background: var(--soft); color: var(--accent-ink); }
+  .emoji { font-size: 26px; line-height: 1.1; }
+  .count { font-size: 12px; color: var(--muted); min-height: 16px; }
+</style>
+
+<script>
+  // Tapping a reaction sends it once; this browser remembers which ones it chose.
+  document.querySelectorAll<HTMLElement>('.reactions').forEach((box) => {
+    const story = box.dataset.story!;
+    box.querySelectorAll<HTMLButtonElement>('.reaction').forEach((button) => {
+      const kind = button.dataset.kind!;
+      const key = `kyc-reacted-${story}-${kind}`;
+      let done = false;
+      try {
+        done = localStorage.getItem(key) === '1';
+      } catch {}
+      if (done) button.setAttribute('aria-pressed', 'true');
+
+      button.addEventListener('click', async () => {
+        if (button.getAttribute('aria-pressed') === 'true') return;
+        button.setAttribute('aria-pressed', 'true');
+        try {
+          localStorage.setItem(key, '1');
+        } catch {}
+        const res = await fetch('/api/react', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ storyId: story, kind }),
+        }).catch(() => null);
+        if (!res?.ok) return;
+        const { counts } = (await res.json()) as { counts: Record<string, number> };
+        box.querySelectorAll<HTMLButtonElement>('.reaction').forEach((b) => {
+          const el = b.querySelector('[data-count]');
+          if (el) el.textContent = counts[b.dataset.kind!] ? String(counts[b.dataset.kind!]) : '';
+        });
+      });
+    });
+  });
+</script>

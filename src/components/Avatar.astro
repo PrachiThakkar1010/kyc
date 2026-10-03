@@ -1,0 +1,45 @@
+---
+// A round photo, or the person's initials when there is no photo yet.
+import { photoUrl } from '../lib/supabase';
+
+interface Props {
+  name: string;
+  path?: string | null;
+  size?: number;
+}
+const { name, path = null, size = 56 } = Astro.props;
+const src = photoUrl(path);
+const initials = name
+  .split(/\s+/)
+  .filter((w) => /^[A-Za-z]/.test(w))
+  .slice(0, 2)
+  .map((w) => w[0]!.toUpperCase())
+  .join('');
+---
+
+{
+  src ? (
+    <img class="avatar" src={src} alt="" width={size} height={size} loading="lazy" style={`--size:${size}px`} />
+  ) : (
+    <span class="avatar initials" aria-hidden="true" style={`--size:${size}px`}>{initials}</span>
+  )
+}
+
+<style>
+  .avatar {
+    width: var(--size);
+    height: var(--size);
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+    background: var(--soft);
+  }
+  .initials {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--muted);
+    font-weight: 700;
+    font-size: calc(var(--size) * 0.34);
+  }
+</style>

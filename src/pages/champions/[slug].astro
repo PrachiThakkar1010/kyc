@@ -1,0 +1,100 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import Avatar from '../../components/Avatar.astro';
+import OnItsWay from '../../components/OnItsWay.astro';
+import CheerWall from '../../components/CheerWall.astro';
+import { publicClient, photoUrl } from '../../lib/supabase';
+import { getChampionPage } from '../../lib/data';
+import { MEDAL_LABEL, paragraphs, prettyDate } from '../../lib/format';
+
+const page = await getChampionPage(publicClient(), Astro.params.slug ?? '');
+if (!page) return Astro.rewrite('/404');
+const { champion, medals, story, cheers } = page;
+const from = [champion.hometown, champion.state].filter(Boolean).join(', ');
+const firstName = champion.name.split(' ')[0];
+
+Astro.response.headers.set('Cache-Control', 'public, max-age=60');
+---
+
+<BaseLayout
+  title={champion.name}
+  description={`${champion.name}, ${champion.sport}. ${medals.length} ${medals.length === 1 ? 'medal' : 'medals'} for India at the Aichi-Nagoya 2026 Asian Games.`}
+  image={photoUrl(champion.photo_path)}
+  turnstile
+>
+  <header class="profile">
+    <Avatar name={champion.name} path={champion.photo_path} size={96} />
+    <div>
+      <h1>{champion.name}</h1>
+      <p class="muted">{champion.sport}{from ? `, from ${from}` : ''}</p>
+    </div>
+  </header>
+  {champion.photo_credit && <p class="credit small muted">Photo: {champion.photo_credit}</p>}
+
+  <section class="section" aria-labelledby="medals-title">
+    <h2 id="medals-title">{medals.length === 1 ? 'Medal' : `${medals.length} medals`} at Aichi-Nagoya 2026</h2>
+    <ul class="medals">
+      {
+        medals.map((m) => (
+          <li>
+            <span class={`medal-pill ${m.medal}`}>
+              <span class={`medal-dot ${m.medal}`} />
+              {MEDAL_LABEL[m.medal]}
+            </span>
+            <span>
+              {m.event}
+              {m.team && (
+                <>
+                  {' '}
+                  with the <a href={`/teams/${m.team.slug}`}>{m.team.name.replace(/^India /, '')}</a>
+                </>
+              )}
+              {m.won_on && <span class="muted small"> · {prettyDate(m.won_on)}</span>}
+            </span>
+          </li>
+        ))
+      }
+    </ul>
+  </section>
+
+  {
+    champion.bio && (
+      <section class="section bio story-text">
+        {paragraphs(champion.bio).map((p) => <p>{p}</p>)}
+      </section>
+    )
+  }
+
+  <section class="section">
+    {
+      story ? (
+        <a href={`/stories/${story.slug}`} class="story-link">
+          <span class="small kicker">Read {firstName}'s journey</span>
+          <span class="story-text title">{story.headline}</span>
+          <span class="small muted">{prettyDate(story.featured_on)}</span>
+        </a>
+      ) : (
+        <OnItsWay medal={medals[0]?.medal ?? null} name={firstName!} />
+      )
+    }
+  </section>
+
+  <CheerWall subject="champion" subjectId={champion.id} name={firstName!} cheers={cheers} />
+</BaseLayout>
+
+<style>
+  .profile { padding-top: 28px; display: flex; align-items: center; gap: 18px; }
+  .profile p { margin-top: 6px; }
+  .credit { margin-top: 8px; }
+  .medals { list-style: none; margin: 14px 0 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+  .medals li { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .bio { display: flex; flex-direction: column; gap: 14px; font-size: 17px; line-height: 1.7; }
+  .story-link {
+    display: flex; flex-direction: column; gap: 8px;
+    padding: 20px; border-radius: 16px;
+    background: var(--card); color: var(--card-ink); text-decoration: none;
+  }
+  .story-link .kicker { color: var(--card-muted); font-weight: 700; }
+  .story-link .title { font-size: 24px; line-height: 1.25; }
+  .story-link .muted { color: var(--card-muted); }
+</style>

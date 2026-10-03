@@ -1,0 +1,48 @@
+---
+import Avatar from './Avatar.astro';
+import type { DirectoryEntry } from '../lib/data';
+
+interface Props {
+  entry: DirectoryEntry;
+}
+const { entry } = Astro.props;
+const count = entry.medals.length;
+const search = [entry.name, entry.sport, entry.state ?? '', entry.kind === 'team' ? 'team' : ''].join(' ').toLowerCase();
+---
+
+<a
+  href={entry.href}
+  class="tile"
+  data-search={search}
+  data-sport={entry.sport.toLowerCase()}
+  data-medals={entry.medals.join(' ')}
+>
+  <Avatar name={entry.name} path={entry.photo_path} size={56} />
+  <span class="name">{entry.name}</span>
+  <span class="sport">{entry.sport}{entry.kind === 'team' ? ', team' : ''}{count > 1 ? `, ${count} medals` : ''}</span>
+  <span class="medals" aria-label={entry.medals.join(', ')}>
+    {entry.medals.map((m) => <span class={`medal-dot ${m}`} />)}
+  </span>
+  <span class:list={['status', { 'has-story': entry.hasStory }]}>
+    {entry.hasStory ? 'Read story' : 'Story on its way'}
+  </span>
+</a>
+
+<style>
+  .tile {
+    padding: 14px;
+    border-radius: 14px;
+    border: 1px solid var(--line);
+    color: var(--ink);
+    text-decoration: none;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .tile:hover { border-color: var(--accent); }
+  .name { font-size: 16px; font-weight: 600; line-height: 1.2; }
+  .sport { font-size: 12px; color: var(--muted); }
+  .medals { display: flex; gap: 4px; flex-wrap: wrap; }
+  .status { font-size: 12px; font-weight: 600; color: var(--muted); margin-top: auto; }
+  .status.has-story { color: var(--accent-ink); }
+</style>

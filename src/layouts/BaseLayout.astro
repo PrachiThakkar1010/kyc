@@ -1,0 +1,71 @@
+---
+import '../styles/global.css';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+
+interface Props {
+  title: string;
+  description?: string;
+  image?: string | null;   // photo shown when the link is shared
+  turnstile?: boolean;     // load Cloudflare's bot check on this page
+}
+
+const {
+  title,
+  description = 'Know the people who made India proud at the Aichi-Nagoya 2026 Asian Games, one journey at a time.',
+  image = null,
+  turnstile = false,
+} = Astro.props;
+
+const fullTitle = title === 'KYC – Know Your Champions' ? title : `${title} | KYC – Know Your Champions`;
+const url = Astro.url.href;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{fullTitle}</title>
+    <meta name="description" content={description} />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="canonical" href={url} />
+
+    <!-- How the link looks when shared on WhatsApp, X, Facebook -->
+    <meta property="og:type" content="article" />
+    <meta property="og:site_name" content="KYC – Know Your Champions" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={url} />
+    {image && <meta property="og:image" content={image} />}
+    <meta name="twitter:card" content={image ? 'summary_large_image' : 'summary'} />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;700&family=Literata:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+
+    <!-- Pick light or dark before the page appears, so it never flashes -->
+    <script is:inline>
+      (function () {
+        var theme;
+        try { theme = localStorage.getItem('theme'); } catch (e) {}
+        if (theme !== 'light' && theme !== 'dark') {
+          theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        }
+        document.documentElement.dataset.theme = theme;
+      })();
+    </script>
+
+    {turnstile && <script is:inline src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>}
+  </head>
+  <body>
+    <Header />
+    <main>
+      <slot />
+    </main>
+    <Footer />
+  </body>
+</html>

@@ -1,0 +1,36 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { friendlyError, withMessage } from '../../lib/admin';
+import { text } from '../../lib/http';
+
+const db = Astro.locals.supabase;
+let error = '';
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const { error: e } = await db.from('settings').upsert([
+    { key: 'tally_as_of', value: text(form, 'tally_as_of', 60) },
+    { key: 'tally_note', value: text(form, 'tally_note', 300) },
+  ]);
+  if (e) error = friendlyError(e);
+  else return Astro.redirect(withMessage('/admin/settings', 'Saved. The home page shows it now.'));
+}
+
+const { data } = await db.from('settings').select('key, value');
+const get = (k: string) => data?.find((s) => s.key === k)?.value ?? '';
+---
+
+<AdminLayout title="Settings">
+  <section class="admin-page">
+    <h1>Settings</h1>
+    {error && <p class="notice error" role="alert">{error}</p>}
+    <form method="post" class="panel">
+      <h2>Medal tally on the home page</h2>
+      <p class="small muted">The numbers are counted automatically from the medals you add. These two lines sit around them.</p>
+      <label class="field">"As of" date <input type="text" name="tally_as_of" maxlength="60" value={get('tally_as_of')} placeholder="4 October" /></label>
+      <label class="field">Note under the tally <textarea name="tally_note" rows="3" maxlength="300">{get('tally_note')}</textarea></label>
+      <button type="submit" class="button">Save</button>
+    </form>
+    <p><a href="/admin/password">Change your password</a></p>
+  </section>
+</AdminLayout>

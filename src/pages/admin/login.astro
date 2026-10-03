@@ -1,0 +1,33 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { text } from '../../lib/http';
+
+let error = Astro.url.searchParams.get('error') === 'inactive' ? 'This account has been switched off. Ask the KYC admin.' : '';
+let email = '';
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  email = text(form, 'email', 200);
+  const password = text(form, 'password', 200);
+  const { error: authError } = await Astro.locals.supabase.auth.signInWithPassword({ email, password });
+  if (!authError) return Astro.redirect('/admin');
+  error = 'That email and password do not match. Check them and try again.';
+}
+---
+
+<AdminLayout title="Log in">
+  <section class="admin-page login">
+    <h1>Log in</h1>
+    <p class="muted">For KYC writers. Accounts are created by the KYC admin.</p>
+    {error && <p class="notice error" role="alert">{error}</p>}
+    <form method="post" class="stack">
+      <label class="field">Email <input type="email" name="email" value={email} required autocomplete="username" /></label>
+      <label class="field">Password <input type="password" name="password" required autocomplete="current-password" /></label>
+      <button type="submit" class="button">Log in</button>
+    </form>
+  </section>
+</AdminLayout>
+
+<style>
+  .login { max-width: 420px; }
+</style>

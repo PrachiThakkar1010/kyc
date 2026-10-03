@@ -1,0 +1,29 @@
+---
+const page = Astro.url.pathname;
+---
+
+<footer class="site-footer">
+  <a href={`/feedback?page=${encodeURIComponent(page)}`}>Suggest a correction or tip</a>
+  <nav aria-label="Footer">
+    <a href="/stories">All stories</a>
+    <a href="/champions">All champions</a>
+    <a href="/medals">All medals</a>
+  </nav>
+  <p class="muted small">KYC, Know Your Champions. Respect begins with recognition.</p>
+</footer>
+
+<style>
+  .site-footer {
+    width: 100%;
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 24px 20px 40px;
+    border-top: 1px solid var(--line);
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    font-size: 15px;
+  }
+  nav { display: flex; flex-wrap: wrap; gap: 20px; }
+  nav a { color: var(--ink); }
+</style>

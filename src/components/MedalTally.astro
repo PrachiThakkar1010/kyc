@@ -1,0 +1,51 @@
+---
+import type { MedalKind } from '../lib/types';
+
+interface Props {
+  counts: Record<MedalKind, number>;
+  asOf: string;
+  note: string;
+}
+const { counts, asOf, note } = Astro.props;
+const kinds: MedalKind[] = ['gold', 'silver', 'bronze'];
+const label = { gold: 'Gold', silver: 'Silver', bronze: 'Bronze' };
+---
+
+<section class="tally" aria-labelledby="tally-title">
+  <div class="section-head">
+    <h2 id="tally-title">India's medals</h2>
+    {asOf && <span class="muted small">As of {asOf}</span>}
+  </div>
+  <div class="grid">
+    {
+      kinds.map((k) => (
+        <a href={`/medals#${k}`} class={`box ${k}`}>
+          <span class={`medal-dot ${k}`} />
+          <span class="count">{counts[k]}</span>
+          <span class="name">{label[k]}</span>
+        </a>
+      ))
+    }
+  </div>
+  {note && <p class="muted small note">{note}</p>}
+</section>
+
+<style>
+  .tally { margin-top: 28px; }
+  .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+  .box {
+    padding: 16px 14px;
+    border-radius: 14px;
+    text-decoration: none;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .box .medal-dot { width: 14px; height: 14px; }
+  .count { font-size: 32px; font-weight: 700; line-height: 1; }
+  .name { font-size: 13px; }
+  .box.gold   { background: var(--gold-bg);   color: var(--gold-ink); }
+  .box.silver { background: var(--silver-bg); color: var(--silver-ink); }
+  .box.bronze { background: var(--bronze-bg); color: var(--bronze-ink); }
+  .note { margin-top: 14px; line-height: 1.5; }
+</style>
