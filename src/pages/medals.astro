@@ -1,5 +1,7 @@
 ---
+// Every medal India won, grouped into gold, silver and bronze.
 import BaseLayout from '../layouts/BaseLayout.astro';
+import Avatar from '../components/Avatar.astro';
 import { publicClient } from '../lib/supabase';
 import { getAllMedals, getTally } from '../lib/data';
 import { MEDAL_LABEL, prettyDate } from '../lib/format';
@@ -8,52 +10,180 @@ import type { MedalKind } from '../lib/types';
 const db = publicClient();
 const [medals, tally] = await Promise.all([getAllMedals(db), getTally(db)]);
 const kinds: MedalKind[] = ['gold', 'silver', 'bronze'];
+const sportsCount = new Set(medals.map((m) => m.sport)).size;
 
 Astro.response.headers.set('Cache-Control', 'public, max-age=60');
 ---
 
 <BaseLayout title="All medals" description={`All ${tally.total} medals India won at the Aichi-Nagoya 2026 Asian Games.`}>
-  <section class="head">
+  <header class="head">
+    <p class="kicker">Aichi-Nagoya 2026 Asian Games</p>
     <h1>All {tally.total} medals</h1>
-    <p class="muted">{tally.asOf ? `As of ${tally.asOf}. ` : ''}Tap a name to meet the champion.</p>
-  </section>
+    <p class="muted lead">
+      Won across {sportsCount} sports{tally.asOf ? `, as of ${tally.asOf}` : ''}. Tap any name to meet the champion behind the medal.
+    </p>
+
+    <!-- Jump links: tap a medal to scroll to its list -->
+    <nav class="jump" aria-label="Jump to a medal">
+      {
+        kinds.map((k) => (
+          <a href={`#${k}`} class={`jump-box ${k}`}>
+            <span class={`big-medal ${k}`} aria-hidden="true" />
+            <span class="jump-count">{tally.counts[k]}</span>
+            <span class="jump-label">{MEDAL_LABEL[k]}</span>
+          </a>
+        ))
+      }
+    </nav>
+  </header>
 
   {
-    kinds.map((k) => (
-      <section class="section" id={k} aria-labelledby={`${k}-title`}>
-        <h2 id={`${k}-title`} class="group-title">
-          <span class={`medal-dot ${k}`} />
-          {MEDAL_LABEL[k]} <span class="muted">{tally.counts[k]}</span>
-        </h2>
-        <ul class="list">
-          {medals
-            .filter((m) => m.medal === k)
-            .map((m) => {
+    kinds.map((k) => {
+      const list = medals.filter((m) => m.medal === k);
+      return (
+        <section class={`group ${k}`} id={k} aria-labelledby={`${k}-title`}>
+          <div class="group-head">
+            <span class={`big-medal ${k}`} aria-hidden="true" />
+            <h2 id={`${k}-title`}>{MEDAL_LABEL[k]}</h2>
+            <span class="group-count">{list.length}</span>
+          </div>
+
+          <ul class="cards">
+            {list.map((m) => {
               const who = m.team ?? m.champion;
               const href = m.team ? `/teams/${m.team.slug}` : `/champions/${m.champion?.slug}`;
               return (
                 <li>
-                  <a href={href} class="who">{who?.name}</a>
-                  <span class="muted small">
-                    {m.sport}, {m.event}
-                    {m.won_on ? ` · ${prettyDate(m.won_on)}` : ''}
-                  </span>
+                  <a href={href} class="card">
+                    <Avatar name={who?.name ?? ''} path={who?.photo_path ?? null} size={48} />
+                    <span class="card-text">
+                      <span class="name">{who?.name}</span>
+                      <span class="event">{m.event}</span>
+                      <span class="meta">
+                        <span class="sport">{m.sport}</span>
+                        {m.team && <span class="team-tag">Team</span>}
+                        {m.won_on && <span class="date">{prettyDate(m.won_on)}</span>}
+                      </span>
+                    </span>
+                    <span class={`ribbon ${k}`} aria-hidden="true" />
+                  </a>
                 </li>
               );
             })}
-        </ul>
-      </section>
-    ))
+          </ul>
+        </section>
+      );
+    })
   }
 </BaseLayout>
 
 <style>
-  .head { padding-top: 28px; }
-  .head p { margin-top: 10px; }
-  .group-title { display: flex; align-items: center; gap: 10px; }
-  .group-title .medal-dot { width: 16px; height: 16px; }
-  .list { list-style: none; margin: 12px 0 0; padding: 0; }
-  .list li { padding: 12px 0; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 2px; }
-  .who { font-weight: 600; color: var(--ink); }
-  section { scroll-margin-top: 16px; }
+  /* ---------- Top of the page ---------- */
+  .head { padding-top: 32px; display: flex; flex-direction: column; gap: 12px; }
+  .kicker { font-size: 13px; font-weight: 700; color: var(--accent-ink); }
+  .lead { font-size: 16px; line-height: 1.5; max-width: 52ch; }
+
+  .jump { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
+  .jump-box {
+    padding: 16px 14px;
+    border-radius: 18px;
+    text-decoration: none;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    transition: transform 0.15s;
+  }
+  .jump-box:hover { transform: translateY(-2px); }
+  .jump-box.gold   { background: var(--gold-bg);   color: var(--gold-ink); }
+  .jump-box.silver { background: var(--silver-bg); color: var(--silver-ink); }
+  .jump-box.bronze { background: var(--bronze-bg); color: var(--bronze-ink); }
+  .jump-count { font-size: 34px; font-weight: 700; line-height: 1; }
+  .jump-label { font-size: 14px; font-weight: 600; }
+
+  /* A round medal with an inner ring, in the medal's colour */
+  .big-medal {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    box-shadow: inset 0 0 0 4px rgba(255, 255, 255, 0.35);
+  }
+  .big-medal.gold   { background: var(--gold); }
+  .big-medal.silver { background: var(--silver); }
+  .big-medal.bronze { background: var(--bronze); }
+
+  /* ---------- Each medal group ---------- */
+  .group { margin-top: 48px; scroll-margin-top: 90px; }
+  .group-head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding-bottom: 14px;
+    margin-bottom: 16px;
+    border-bottom: 3px solid var(--line);
+  }
+  .group.gold .group-head   { border-color: var(--gold); }
+  .group.silver .group-head { border-color: var(--silver); }
+  .group.bronze .group-head { border-color: var(--bronze); }
+  .group-head .big-medal { width: 32px; height: 32px; }
+  .group-count {
+    margin-left: auto;
+    min-width: 40px;
+    padding: 4px 12px;
+    border-radius: 999px;
+    font-size: 15px;
+    font-weight: 700;
+    text-align: center;
+  }
+  .gold .group-count   { background: var(--gold-bg);   color: var(--gold-ink); }
+  .silver .group-count { background: var(--silver-bg); color: var(--silver-ink); }
+  .bronze .group-count { background: var(--bronze-bg); color: var(--bronze-ink); }
+
+  /* ---------- Medal cards ---------- */
+  .cards { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr; gap: 10px; }
+  .card {
+    position: relative;
+    overflow: hidden;
+    height: 100%;
+    padding: 14px 16px 14px 18px;
+    border-radius: 14px;
+    border: 1px solid var(--line);
+    background: var(--bg);
+    color: var(--ink);
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    transition: border-color 0.15s, transform 0.15s;
+  }
+  .card:hover { border-color: var(--accent); transform: translateY(-2px); }
+
+  /* A thin strip of medal colour on the left edge of each card */
+  .ribbon { position: absolute; left: 0; top: 0; bottom: 0; width: 5px; }
+  .ribbon.gold   { background: var(--gold); }
+  .ribbon.silver { background: var(--silver); }
+  .ribbon.bronze { background: var(--bronze); }
+
+  .card-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+  .name { font-size: 16px; font-weight: 700; line-height: 1.25; }
+  .event { font-size: 14px; color: var(--ink); }
+  .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 12px; color: var(--muted); }
+  .team-tag {
+    padding: 1px 8px;
+    border-radius: 999px;
+    background: var(--soft);
+    font-weight: 600;
+  }
+
+  @media (min-width: 640px) {
+    .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  }
+  @media (min-width: 960px) {
+    .head { padding-top: 48px; }
+    .jump { max-width: 640px; gap: 14px; }
+    .jump-box { padding: 20px 18px; }
+    .jump-count { font-size: 40px; }
+    .group { margin-top: 64px; }
+    .cards { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+  }
 </style>

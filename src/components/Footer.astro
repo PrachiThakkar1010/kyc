@@ -75,8 +75,8 @@ const socials: { label: string; href: string }[] = [];
   /* Deep blue in light mode, deep green in dark mode (same as the Story of the Day card) */
   .site-footer {
     margin-top: 48px;
-    background: var(--card);
-    color: var(--card-ink);
+    background: var(--foot);
+    color: var(--foot-ink);
   }
   .inner {
     max-width: calc(var(--page) + 40px);
@@ -86,11 +86,11 @@ const socials: { label: string; href: string }[] = [];
 
   /* ---- The road: sits on the top edge, half above, half inside ---- */
   .road { display: flex; align-items: center; transform: translateY(-50%); }
-  .line { flex: 1; height: 0; border-top: 3px solid var(--card-ink); }
-  .line.rough { border-top-style: dashed; border-color: var(--card-road-dim); }
-  .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--card-ink); flex-shrink: 0; }
-  .dot.start { background: var(--bg); border: 3px solid var(--card); width: 16px; height: 16px; }
-  .dot.setback { background: var(--card); border: 2px dashed var(--card-road-dim); width: 14px; height: 14px; }
+  .line { flex: 1; height: 0; border-top: 3px solid var(--foot-ink); }
+  .line.rough { border-top-style: dashed; border-color: var(--foot-road-dim); }
+  .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--foot-ink); flex-shrink: 0; }
+  .dot.start { background: var(--bg); border: 3px solid var(--foot); width: 16px; height: 16px; }
+  .dot.setback { background: var(--foot); border: 2px dashed var(--foot-road-dim); width: 14px; height: 14px; }
   .gold { width: 24px; height: 24px; border-radius: 50%; background: var(--gold); border: 4px solid var(--gold-bg); flex-shrink: 0; }
 
   .quote {
@@ -101,7 +101,7 @@ const socials: { label: string; href: string }[] = [];
     font-weight: 500;
     max-width: 760px;
   }
-  .motto { margin-top: 10px; font-size: 15px; color: var(--card-muted); }
+  .motto { margin-top: 10px; font-size: 15px; color: var(--foot-muted); }
 
   .groups {
     margin-top: 32px;
@@ -110,18 +110,18 @@ const socials: { label: string; href: string }[] = [];
     gap: 28px 20px;
   }
   .group { display: flex; flex-direction: column; gap: 4px; }
-  .group-title { font-size: 12px; font-weight: 700; color: var(--card-muted); margin-bottom: 6px; }
-  .group a { color: var(--card-ink); text-decoration: none; font-size: 15px; padding: 5px 0; }
+  .group-title { font-size: 12px; font-weight: 700; color: var(--foot-muted); margin-bottom: 6px; }
+  .group a { color: var(--foot-ink); text-decoration: none; font-size: 15px; padding: 5px 0; }
   .group a:hover { text-decoration: underline; text-underline-offset: 4px; }
-  .group a:focus-visible, .share-kyc:focus-visible { outline-color: var(--card-ink); }
+  .group a:focus-visible, .share-kyc:focus-visible { outline-color: var(--foot-ink); }
 
   .share { grid-column: 1 / -1; display: flex; flex-direction: column; }
   .share-kyc {
     min-height: 50px;
     border-radius: 14px;
     border: 0;
-    background: var(--card-ink);
-    color: var(--card);
+    background: var(--foot-ink);
+    color: var(--foot);
     font-family: inherit;
     font-size: 15px;
     font-weight: 700;
@@ -131,19 +131,19 @@ const socials: { label: string; href: string }[] = [];
     gap: 8px;
     cursor: pointer;
   }
-  .share-status { margin-top: 8px; font-size: 13px; color: var(--card-muted); }
+  .share-status { margin-top: 8px; font-size: 13px; color: var(--foot-muted); }
   .share-status:empty { display: none; }
 
   .legal {
     margin-top: 36px;
     padding-top: 16px;
-    border-top: 1px solid color-mix(in srgb, var(--card-ink) 18%, transparent);
+    border-top: 1px solid color-mix(in srgb, var(--foot-ink) 18%, transparent);
     display: flex;
     flex-wrap: wrap;
     justify-content: space-between;
     gap: 8px;
     font-size: 13px;
-    color: var(--card-muted);
+    color: var(--foot-muted);
   }
 
   /* ---- Tablets and bigger ---- */

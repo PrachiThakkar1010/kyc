@@ -32,6 +32,13 @@
   --card-road-dim: #C3CAF2;
   --card-edge: #2F3E9E;
 
+  
+  /* Footer: deep blue in light mode */
+  --foot: #2F3E9E;
+  --foot-ink: #FFFFFF;
+  --foot-muted: #D3D9F7;
+  --foot-road-dim: #C3CAF2;
+
   --font-ui: 'Bricolage Grotesque', 'Segoe UI', system-ui, sans-serif;
   --font-story: 'Literata', Georgia, serif;
   --radius: 12px;
@@ -67,11 +74,21 @@
   --card-photo: #1E3F33;
   --card-road-dim: #8FB5A6;
   --card-edge: #24483B;
+
+  
+  /* Footer: deep navy in dark mode (green stays special for the Story of the Day) */
+  --foot: #181D33;
+  --foot-ink: #ECEEF2;
+  --foot-muted: #A9B2D6;
+  --foot-road-dim: #6F7BC4;
 }
 
 /* ---------- 2. Basics ---------- */
 *, *::before, *::after { box-sizing: border-box; }
+
+/* Anything marked hidden stays hidden, even if a class sets display. */
 [hidden] { display: none !important; }
+
 html { -webkit-text-size-adjust: 100%; }
 
 body {
@@ -87,10 +104,20 @@ body {
 
 main {
   width: 100%;
-  max-width: 720px;
+  max-width: calc(var(--page) + 40px);
   margin: 0 auto;
   padding: 0 20px 56px;
   flex: 1;
+}
+main.narrow { max-width: calc(var(--read) + 40px); }
+
+/* A centred column for long reading inside a wide page */
+.reading { max-width: var(--read); margin-inline: auto; }
+
+@media (min-width: 768px) {
+  main { max-width: calc(var(--page) + 64px); padding: 0 32px 80px; }
+  main.narrow { max-width: calc(var(--read) + 64px); }
+  h1 { font-size: 44px; }
 }
 
 h1, h2, h3, p, figure { margin: 0; }

@@ -50,6 +50,7 @@ Astro.response.headers.set('Cache-Control', preview ? 'private, no-store' : 'pub
       )
     }
 
+    <div class="reading">
     <header class="story-head">
       <span class="kicker">{isToday ? 'Story of the day, ' : ''}{prettyDate(story.featured_on)}</span>
       <h1><a href={subject.href}>{subject.name}</a></h1>
@@ -86,8 +87,10 @@ Astro.response.headers.set('Cache-Control', preview ? 'private, no-store' : 'pub
       <Reactions storyId={story.id} counts={counts} />
       <ShareBar title={`${subject.name}: ${story.headline}`} text={`${story.headline} The journey of ${subject.name}, on KYC – Know Your Champions.`} label={`Share ${subject.isTeam ? 'their' : `${firstName}'s`} journey`} />
     </section>
+    </div>
   </article>
 
+  <div class="reading">
   <CheerWall
     subject={story.team_id ? 'team' : 'champion'}
     subjectId={(story.team_id ?? story.champion_id)!}
@@ -95,6 +98,7 @@ Astro.response.headers.set('Cache-Control', preview ? 'private, no-store' : 'pub
     cheers={cheers}
     members={team?.members.map((m) => ({ id: m.champion.id, name: m.champion.name })) ?? []}
   />
+  </div>
 </BaseLayout>
 
 <style>
@@ -103,9 +107,12 @@ Astro.response.headers.set('Cache-Control', preview ? 'private, no-store' : 'pub
   .cover img { width: 100%; max-height: 460px; object-fit: cover; }
   .cover figcaption { font-size: 12px; color: var(--muted); padding: 6px 20px 0; }
   @media (min-width: 760px) {
-    .cover { margin: 20px 0 0; }
-    .cover img { border-radius: 18px; }
+    .cover { margin: 24px 0 0; }
+    .cover img { border-radius: 20px; max-height: 560px; }
     .cover figcaption { padding-left: 0; }
+    .story-head { padding-top: 36px; }
+    h1 { font-size: 48px; }
+    .headline { font-size: 32px; }
   }
   .story-head { padding-top: 24px; display: flex; flex-direction: column; gap: 14px; }
   .kicker { font-size: 13px; font-weight: 600; color: var(--accent-ink); }

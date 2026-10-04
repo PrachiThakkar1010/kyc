@@ -17,32 +17,49 @@ const bestMedalOf = (s: { champion_id: string | null; team_id: string | null }):
 
 const [today, ...earlier] = stories;
 const sports = [...new Set(directory.map((e) => e.sport))].sort().slice(0, 8);
-const featured = directory.slice(0, 4);
+const featured = directory.slice(0, 10);
 
 Astro.response.headers.set('Cache-Control', 'public, max-age=60');
 ---
 
 <BaseLayout title="KYC – Know Your Champions" image={photoUrl(today?.cover_path)}>
-  <section class="intro">
-    <h1>{tally.total} medals. Every one has a story.</h1>
-    <p>Meet the people who won them for India at the Aichi-Nagoya 2026 Asian Games, one journey at a time.</p>
-  </section>
+  <div class="hero">
+    <div class="hero-text">
+      <section class="intro">
+        <h1>{tally.total} medals. Every one has a story.</h1>
+        <p>Meet the people who won them for India at the Aichi-Nagoya 2026 Asian Games, one journey at a time.</p>
+      </section>
+      <MedalTally counts={tally.counts} asOf={tally.asOf} note={tally.note} />
+    </div>
 
-  <MedalTally counts={tally.counts} asOf={tally.asOf} note={tally.note} />
-
-  <section class="section">
-    {
-      today ? (
-        <StoryOfDay story={today} medal={bestMedalOf(today)} />
-      ) : (
-        <div class="first-story">
-          <p class="kicker">Story of the day</p>
-          <p class="headline">The first story is on its way.</p>
-          <p class="muted">Meanwhile, meet the champions below.</p>
-        </div>
-      )
-    }
-  </section>
+    <section class="hero-story">
+      {
+        today ? (
+          <StoryOfDay story={today} medal={bestMedalOf(today)} />
+        ) : (
+          <div class="first-story">
+            <div class="fs-art" aria-hidden="true">
+              <div class="fs-road">
+                <span class="fs-dot" />
+                <span class="fs-line" />
+                <span class="fs-dot" />
+                <span class="fs-line" />
+                <span class="fs-dot" />
+                <span class="fs-line" />
+                <span class="fs-gold" />
+              </div>
+            </div>
+            <div class="fs-body">
+              <p class="kicker">Story of the day</p>
+              <p class="headline">The first story is on its way.</p>
+              <p class="fs-text">One champion's journey, every day, from their hometown to the podium. Starting soon.</p>
+              <a href="#champions-title" class="fs-button">Meet the champions</a>
+            </div>
+          </div>
+        )
+      }
+    </section>
+  </div>
 
   {
     earlier.length > 0 && (
@@ -60,7 +77,7 @@ Astro.response.headers.set('Cache-Control', 'public, max-age=60');
     )
   }
 
-  <section class="section" aria-labelledby="champions-title">
+  <section class="section champions" aria-labelledby="champions-title">
     <h2 id="champions-title">Meet the champions</h2>
 
     <form action="/champions" method="get" class="search">
@@ -86,13 +103,75 @@ Astro.response.headers.set('Cache-Control', 'public, max-age=60');
 <style>
   .intro { padding-top: 28px; }
   .intro p { margin-top: 12px; font-size: 15px; color: var(--muted); }
+  .hero-story { margin-top: 40px; }
 
-  .first-story { padding: 28px 20px; border-radius: 22px; background: var(--card); color: var(--card-ink); }
+  /* Big screens: words and tally on the left, today's story on the right */
+  @media (min-width: 960px) {
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+      gap: 56px;
+      align-items: center;
+      padding-top: 48px;
+    }
+    .intro { padding-top: 0; }
+    .intro h1 { font-size: 56px; line-height: 1.02; letter-spacing: -1.6px; }
+    .intro p { font-size: 18px; margin-top: 18px; max-width: 34ch; }
+    .hero-story { margin-top: 0; }
+  }
+
+  /* Placeholder shaped like the real Story of the Day card */
+  .first-story {
+    border-radius: 22px;
+    overflow: hidden;
+    background: var(--card);
+    color: var(--card-ink);
+    border: 1px solid var(--card-edge);
+  }
+  .fs-art {
+    height: 220px;
+    background: var(--card-photo);
+    display: flex;
+    align-items: center;
+    padding: 0 32px;
+  }
+  .fs-road { flex: 1; display: flex; align-items: center; }
+  .fs-dot {
+    width: 16px; height: 16px; border-radius: 50%; flex-shrink: 0;
+    border: 3px dotted var(--card-road-dim);
+  }
+  .fs-line { flex: 1; border-top: 4px dotted var(--card-road-dim); }
+  .fs-gold {
+    width: 44px; height: 44px; border-radius: 50%; flex-shrink: 0;
+    background: var(--gold); border: 7px solid var(--gold-bg);
+  }
+  .fs-body { padding: 24px 22px 24px; display: flex; flex-direction: column; gap: 10px; }
   .kicker { font-size: 13px; font-weight: 700; color: var(--card-muted); }
-  .headline { font-family: var(--font-story); font-size: 28px; margin: 8px 0; }
-  .first-story .muted { color: var(--card-muted); }
+  .headline { font-family: var(--font-story); font-size: 30px; line-height: 1.15; font-weight: 500; }
+  .fs-text { font-size: 15px; line-height: 1.5; color: var(--card-muted); }
+  .fs-button {
+    margin-top: 6px;
+    min-height: 52px;
+    border-radius: 14px;
+    background: var(--card-ink);
+    color: var(--card);
+    font-size: 16px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+  }
+  @media (min-width: 960px) {
+    .fs-art { height: 260px; padding: 0 44px; }
+    .fs-body { padding: 28px 28px 30px; }
+    .headline { font-size: 34px; }
+  }
 
   .story-list { margin: 0; padding: 0; }
+  @media (min-width: 768px) {
+    .story-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 32px; }
+  }
 
   .search { margin-top: 14px; }
   .chips { display: flex; gap: 8px; margin: 14px 0; overflow-x: auto; padding-bottom: 4px; }
@@ -112,8 +191,21 @@ Astro.response.headers.set('Cache-Control', 'public, max-age=60');
   .chip.is-active { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 
   .champ-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  /* Phones show 4 champions, tablets 8, big screens 10 */
+  .champ-grid > :global(:nth-child(n + 5)) { display: none; }
   @media (min-width: 640px) {
-    .champ-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .champ-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+    .champ-grid > :global(:nth-child(-n + 8)) { display: flex; }
   }
+  @media (min-width: 960px) {
+    .champ-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+    .champ-grid > :global(:nth-child(n)) { display: flex; }
+    .search { max-width: 480px; }
+  }
+  #champions-title { scroll-margin-top: 90px; }
   .see-all { margin-top: 14px; }
+  @media (min-width: 768px) {
+    .see-all { width: auto; padding: 0 28px; }
+    .section { margin-top: 64px; }
+  }
 </style>

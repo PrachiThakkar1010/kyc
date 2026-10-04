@@ -25,6 +25,8 @@ Astro.response.headers.set('Cache-Control', 'public, max-age=60');
     )
   }
 
+  <div class="layout">
+  <div class="main-col">
   <header class="head">
     <p class="kicker small">{team.sport}</p>
     <h1>{team.name}</h1>
@@ -89,6 +91,8 @@ Astro.response.headers.set('Cache-Control', 'public, max-age=60');
     }
   </section>
 
+  </div>
+  <aside class="side-col">
   <CheerWall
     subject="team"
     subjectId={team.id}
@@ -96,6 +100,8 @@ Astro.response.headers.set('Cache-Control', 'public, max-age=60');
     cheers={cheers}
     members={members.map((m) => ({ id: m.champion.id, name: m.champion.name }))}
   />
+  </aside>
+  </div>
 </BaseLayout>
 
 <style>
@@ -103,8 +109,18 @@ Astro.response.headers.set('Cache-Control', 'public, max-age=60');
   .cover img { width: 100%; max-height: 420px; object-fit: cover; }
   .cover figcaption { font-size: 12px; color: var(--muted); padding: 6px 20px 0; }
   @media (min-width: 760px) {
-    .cover { margin: 20px 0 0; }
-    .cover img { border-radius: 18px; }
+    .cover { margin: 24px 0 0; }
+    .cover img { border-radius: 20px; max-height: 520px; }
+  }
+  @media (min-width: 960px) {
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 420px);
+      gap: 64px;
+      align-items: start;
+    }
+    .head { padding-top: 36px; }
+    .players { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 24px; }
   }
   .head { padding-top: 24px; display: flex; flex-direction: column; gap: 12px; }
   .kicker { color: var(--accent-ink); font-weight: 600; }

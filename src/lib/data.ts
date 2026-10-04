@@ -164,14 +164,14 @@ export async function getDirectory(db: SupabaseClient): Promise<DirectoryEntry[]
 // All medals, for the medals page
 // ---------------------------------------------------------------------
 export interface MedalRow extends Medal {
-  champion: Pick<Champion, 'name' | 'slug'> | null;
-  team: Pick<Team, 'name' | 'slug'> | null;
+   champion: Pick<Champion, 'name' | 'slug' | 'photo_path'> | null;
+   team: Pick<Team, 'name' | 'slug' | 'photo_path'> | null;
 }
 
 export async function getAllMedals(db: SupabaseClient): Promise<MedalRow[]> {
   const { data } = await db
     .from('medals')
-    .select('*, champion:champions(name, slug), team:teams(name, slug)')
+    .select('*, champion:champions(name, slug, photo_path), team:teams(name, slug, photo_path)')
     .order('won_on', { ascending: false, nullsFirst: false });
   return ((data ?? []) as unknown as MedalRow[]).sort((a, b) => MEDAL_ORDER[a.medal] - MEDAL_ORDER[b.medal]);
 }
