@@ -6,163 +6,1165 @@ import { TURNSTILE_SITE_KEY } from 'astro:env/server';
 interface Props {
   subject: 'champion' | 'team';
   subjectId: string;
-  name: string;                               // who the wall is for
+  name: string;
   cheers: Cheer[];
-  members?: { id: string; name: string }[];   // team players who can be tagged
+  members?: { id: string; name: string }[];
 }
+
 const { subject, subjectId, name, cheers, members = [] } = Astro.props;
-const memberName = (id: string | null) => members.find((m) => m.id === id)?.name;
+
+const memberName = (id: string | null) =>
+  members.find((m) => m.id === id)?.name;
 ---
 
 <section class="cheer-wall section" aria-labelledby="cheer-title" id="cheer">
-  <h2 id="cheer-title">Cheer for {name}</h2>
-  <p class="muted intro">Your message stays on this page, long after the story moves to the archive.</p>
 
-  <form class="cheer-form" method="post" action="/api/cheer" novalidate>
-    <input type="hidden" name="subject" value={subject} />
-    <input type="hidden" name="subjectId" value={subjectId} />
 
-    <label class="field">
-      Your message
-      <textarea name="message" rows="3" maxlength="280" required placeholder="Congratulations, champion. The whole country is proud of you."></textarea>
-      <span class="hint"><span data-left>280</span> characters left</span>
-    </label>
+  <!-- ================================
+       CHEER FORM
+  ================================= -->
 
-    <div class="row">
-      <label class="field">
-        Name
-        <input type="text" name="name" maxlength="60" required autocomplete="given-name" placeholder="Riya" />
-      </label>
-      <label class="field">
-        City <span class="hint">(optional)</span>
-        <input type="text" name="city" maxlength="60" autocomplete="address-level2" placeholder="Guwahati" />
-      </label>
+  <div class="cheer-composer">
+
+    <div class="composer-top">
+
+      <div class="composer-icon" aria-hidden="true">
+        ✦
+      </div>
+
+      <div>
+        <h3>Leave your cheer</h3>
+        <p>Send a little appreciation their way.</p>
+      </div>
+
     </div>
 
-    {
-      members.length > 0 && (
+
+    <form
+      class="cheer-form"
+      method="post"
+      action="/api/cheer"
+      novalidate
+    >
+
+      <input
+        type="hidden"
+        name="subject"
+        value={subject}
+      />
+
+      <input
+        type="hidden"
+        name="subjectId"
+        value={subjectId}
+      />
+
+
+      <!-- Message -->
+
+      <label class="field">
+
+        <span class="field-label">
+          Your message
+        </span>
+
+        <textarea
+          name="message"
+          rows="3"
+          maxlength="280"
+          required
+          placeholder="Congratulations, champion. The whole country is proud of you."
+        ></textarea>
+
+        <span class="hint">
+          <span data-left>280</span> characters left
+        </span>
+
+      </label>
+
+
+      <!-- Name + City -->
+
+      <div class="row">
+
         <label class="field">
-          For a particular player? <span class="hint">(optional)</span>
-          <select name="tagged">
-            <option value="">The whole team</option>
-            {members.map((m) => (
-              <option value={m.id}>{m.name}</option>
-            ))}
-          </select>
+
+          <span class="field-label">
+            Name
+          </span>
+
+          <input
+            type="text"
+            name="name"
+            maxlength="60"
+            required
+            autocomplete="given-name"
+            placeholder="Riya"
+          />
+
         </label>
-      )
-    }
 
-    {TURNSTILE_SITE_KEY && <div class="cf-turnstile" data-sitekey={TURNSTILE_SITE_KEY} data-size="flexible" />}
 
-    <button type="submit" class="button-outline wide">Send cheer</button>
-    <p class="notice" role="status" hidden></p>
-  </form>
+        <label class="field">
+
+          <span class="field-label">
+            City <span class="hint">(optional)</span>
+          </span>
+
+          <input
+            type="text"
+            name="city"
+            maxlength="60"
+            autocomplete="address-level2"
+            placeholder="Guwahati"
+          />
+
+        </label>
+
+      </div>
+
+
+      <!-- Team member -->
+
+      {
+        members.length > 0 && (
+          <label class="field">
+
+            <span class="field-label">
+              For a particular player?
+              <span class="hint">(optional)</span>
+            </span>
+
+            <select name="tagged">
+
+              <option value="">
+                The whole team
+              </option>
+
+              {members.map((m) => (
+                <option value={m.id}>
+                  {m.name}
+                </option>
+              ))}
+
+            </select>
+
+          </label>
+        )
+      }
+
+
+      <!-- Turnstile -->
+
+      {
+        TURNSTILE_SITE_KEY && (
+          <div
+            class="cf-turnstile"
+            data-sitekey={TURNSTILE_SITE_KEY}
+            data-size="flexible"
+          />
+        )
+      }
+
+
+      <!-- Submit -->
+
+      <button
+        type="submit"
+        class="button-outline wide"
+      >
+        Send your cheer
+        <span aria-hidden="true">→</span>
+      </button>
+
+      <p
+        class="notice"
+        role="status"
+        hidden
+      ></p>
+
+    </form>
+
+  </div>
+
+
+  <!-- ================================
+       COMMUNITY BOARD HEADING
+  ================================= -->
+
+  {
+    cheers.length > 0 && (
+      <div class="cheers-heading">
+
+        <div>
+
+          <span class="cheer-kicker">
+            FROM THE HEARTS OF PEOPLE
+          </span>
+
+          <h3>
+            Cheers for {name}
+          </h3>
+
+        </div>
+
+        <span class="cheer-count">
+          {cheers.length}
+          {cheers.length === 1 ? ' message' : ' messages'}
+        </span>
+
+      </div>
+    )
+  }
+
+
+  <!-- ================================
+       PINNED MESSAGE BOARD
+  ================================= -->
 
   <ul class="cheers">
+
     {
       cheers.map((c) => (
         <li class="cheer">
-          <p class="message story-text">{c.message}</p>
-          <p class="by small muted">
-            {c.name}
-            {c.city ? `, ${c.city}` : ''}
-            {memberName(c.tagged_champion_id) ? ` · for ${memberName(c.tagged_champion_id)}` : ''}
-            {' · '}
-            {prettyDate(c.created_at.slice(0, 10))}
+
+          <!-- Pin -->
+
+          <div
+            class="pin"
+            aria-hidden="true"
+          ></div>
+
+
+          <!-- Message -->
+
+          <p class="message story-text">
+            {c.message}
           </p>
-          <button type="button" class="button-quiet report" data-id={c.id}>Report</button>
+
+
+          <!-- Author -->
+
+          <p class="by small muted">
+
+            {c.name}
+
+            {c.city
+              ? `, ${c.city}`
+              : ''}
+
+            {
+              memberName(c.tagged_champion_id)
+                ? ` · for ${memberName(c.tagged_champion_id)}`
+                : ''
+            }
+
+            {' · '}
+
+            {prettyDate(
+              c.created_at.slice(0, 10)
+            )}
+
+          </p>
+
+
+          <!-- Report -->
+
+          <button
+            type="button"
+            class="button-quiet report"
+            data-id={c.id}
+          >
+            Report
+          </button>
+
         </li>
       ))
     }
+
   </ul>
-  {cheers.length === 0 && <p class="empty muted small">Be the first to send {name} a message.</p>}
+
+
+  <!-- Empty state -->
+
+  {
+    cheers.length === 0 && (
+      <p class="empty muted small">
+        Be the first to pin a message for {name}.
+      </p>
+    )
+  }
+
 </section>
 
+
 <style>
-  .intro { font-size: 14px; margin-top: 8px; }
-  .cheer-form { margin-top: 16px; display: flex; flex-direction: column; gap: 14px; }
-  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-  .cheers { list-style: none; margin: 24px 0 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
-  .cheer { padding: 16px; border-radius: 14px; background: var(--soft); display: flex; flex-direction: column; gap: 6px; }
-  .message { font-size: 16px; line-height: 1.55; overflow-wrap: anywhere; }
-  .report { align-self: flex-start; font-size: 12px; padding: 4px 0; }
-  .empty { margin-top: 16px; }
+
+/* =====================================
+   HEADER
+===================================== */
+
+.cheer-heading {
+  max-width: 650px;
+}
+
+.cheer-kicker {
+  display: block;
+
+  font-size: 11px;
+  font-weight: 700;
+
+  letter-spacing: .12em;
+
+  color: var(--muted);
+}
+
+.cheer-heading h2 {
+  margin: 6px 0 0;
+}
+
+.intro {
+  font-size: 14px;
+  margin-top: 8px;
+}
+
+
+/* =====================================
+   COMPOSER
+===================================== */
+
+.cheer-composer {
+  margin-top: 24px;
+
+  padding: 24px;
+
+  border: 1px solid var(--border);
+  border-radius: 20px;
+
+  background: var(--soft);
+}
+
+.composer-top {
+  display: flex;
+  align-items: center;
+
+  gap: 12px;
+
+  margin-bottom: 20px;
+}
+
+.composer-icon {
+  width: 42px;
+  height: 42px;
+
+  display: grid;
+  place-items: center;
+
+  border-radius: 50%;
+
+  background: var(--background);
+
+  font-size: 20px;
+}
+
+.composer-top h3 {
+  margin: 0;
+
+  font-size: 18px;
+}
+
+.composer-top p {
+  margin: 3px 0 0;
+
+  font-size: 13px;
+
+  color: var(--muted);
+}
+
+
+/* =====================================
+   FORM
+===================================== */
+
+.cheer-form {
+  display: flex;
+  flex-direction: column;
+
+  gap: 14px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+
+  gap: 6px;
+}
+
+.field-label {
+  min-height: 20px;
+}
+
+.row {
+  display: grid;
+
+  grid-template-columns: 1fr 1fr;
+
+  gap: 12px;
+}
+
+.cheer-form textarea {
+  min-height: 120px;
+
+  resize: vertical;
+
+  font-size: 15px;
+
+  line-height: 1.6;
+}
+
+
+/* =====================================
+   COMMUNITY HEADING
+===================================== */
+
+.cheers-heading {
+  margin-top: 42px;
+
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+
+  gap: 16px;
+}
+
+.cheers-heading h3 {
+  margin: 5px 0 0;
+
+  font-size: 24px;
+}
+
+.cheer-count {
+  font-size: 13px;
+
+  color: var(--muted);
+}
+
+
+/* =====================================
+   PINNED CHEER BOARD
+===================================== */
+
+.cheers {
+  position: relative;
+
+  list-style: none;
+
+  margin: 24px 0 0;
+  padding: 32px 24px;
+
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 28px;
+
+  border-radius: 24px;
+
+  /* Light mode */
+  background: #F2F4F8;
+  border: 1px solid #D5D9E1;
+}
+
+
+/* =====================================
+   PINNED NOTE
+===================================== */
+
+.cheer {
+  position: relative;
+
+  padding: 30px 22px 20px;
+
+  min-height: 150px;
+
+  border: 1px solid #E0E3E8;
+  border-radius: 8px;
+
+  /* Light mode */
+  background: #FFFFFF;
+
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+
+  box-shadow:
+    0 3px 8px rgba(21, 23, 28, 0.05),
+    0 10px 20px rgba(21, 23, 28, 0.03);
+
+  transform: rotate(-1deg);
+
+  transition:
+    transform .2s ease,
+    box-shadow .2s ease;
+}
+
+
+/* Slight variation */
+
+.cheer:nth-child(even) {
+  background: #FAFBFC;
+  transform: rotate(1.2deg);
+}
+
+.cheer:nth-child(3n) {
+  background: #FFFFFF;
+  transform: rotate(-0.4deg);
+}
+
+.cheer:nth-child(4n) {
+  background: #F8F9FB;
+  transform: rotate(.7deg);
+}
+
+
+/* Hover */
+
+.cheer:hover {
+  transform: translateY(-5px) rotate(0deg);
+
+  box-shadow:
+    0 8px 18px rgba(21, 23, 28, 0.08),
+    0 16px 30px rgba(21, 23, 28, 0.05);
+
+  z-index: 2;
+}
+
+
+/* =====================================
+   PIN
+===================================== */
+
+.pin {
+  position: absolute;
+
+  top: -8px;
+  left: 50%;
+
+  width: 15px;
+  height: 15px;
+
+  transform: translateX(-50%);
+
+  border-radius: 50%;
+
+  /* Light mode */
+  background: #7B8492;
+
+  box-shadow:
+    0 2px 5px rgba(0, 0, 0, 0.18);
+
+  z-index: 2;
+}
+
+.pin::after {
+  content: "";
+
+  position: absolute;
+
+  left: 50%;
+  top: 100%;
+
+  width: 2px;
+  height: 8px;
+
+  transform: translateX(-50%);
+
+  background: #7B8492;
+
+  opacity: .4;
+}
+
+
+/* =====================================
+   TEXT — LIGHT MODE
+===================================== */
+
+.message {
+  margin: 8px 0 10px;
+
+  font-size: 16px;
+  line-height: 1.6;
+
+  overflow-wrap: anywhere;
+
+  color: #15171C;
+}
+
+.by {
+  margin: 0;
+
+  font-size: 12px;
+
+  color: #5B6270;
+}
+
+
+/* =====================================
+   DARK MODE
+===================================== */
+
+:root[data-theme="dark"] .cheers {
+
+  background: #181D33;
+  border-color: #2E333D;
+}
+
+
+:root[data-theme="dark"] .cheer {
+
+  background: #20252E;
+  border-color: #303640;
+
+  box-shadow:
+    0 4px 10px rgba(0, 0, 0, 0.18);
+}
+
+
+/* Subtle card variations */
+
+:root[data-theme="dark"] .cheer:nth-child(even) {
+  background: #232933;
+}
+
+:root[data-theme="dark"] .cheer:nth-child(3n) {
+  background: #20252E;
+}
+
+:root[data-theme="dark"] .cheer:nth-child(4n) {
+  background: #222832;
+}
+
+
+/* Dark mode hover */
+
+:root[data-theme="dark"] .cheer:hover {
+
+  box-shadow:
+    0 8px 20px rgba(0, 0, 0, 0.28),
+    0 16px 30px rgba(0, 0, 0, 0.18);
+}
+
+
+/* Dark mode pin */
+
+:root[data-theme="dark"] .pin {
+  background: #8B96A8;
+}
+
+:root[data-theme="dark"] .pin::after {
+  background: #8B96A8;
+}
+
+
+/* Dark mode text */
+
+:root[data-theme="dark"] .message {
+  color: #ECEEF2;
+}
+
+:root[data-theme="dark"] .by {
+  color: #A3A9B5;
+}
+
+
+/* =====================================
+   MOBILE
+===================================== */
+
+@media (max-width: 700px) {
+
+  .cheers {
+    grid-template-columns: 1fr;
+
+    padding: 28px 16px;
+
+    gap: 22px;
+  }
+
+  .cheer {
+    min-height: 140px;
+
+    padding: 28px 18px 18px;
+  }
+
+}
+
+/* =====================================
+   REPORT
+===================================== */
+
+.report {
+  align-self: flex-end;
+
+  font-size: 11px;
+
+  padding: 4px 0;
+
+  opacity: .4;
+
+  transition: opacity .2s ease;
+}
+
+.report:hover {
+  opacity: 1;
+}
+
+
+/* =====================================
+   EMPTY STATE
+===================================== */
+
+.empty {
+  margin-top: 20px;
+}
+
+
+/* =====================================
+   MOBILE
+===================================== */
+
+@media (max-width: 700px) {
+
+  .cheer-composer {
+    padding: 18px;
+
+    border-radius: 16px;
+  }
+
+
+  .row {
+    grid-template-columns: 1fr;
+  }
+
+
+  .cheers {
+    grid-template-columns: 1fr;
+
+    padding: 28px 16px;
+
+    gap: 22px;
+  }
+
+
+  .cheer {
+    min-height: 140px;
+
+    padding: 28px 18px 18px;
+  }
+
+
+  .cheers-heading {
+    align-items: flex-start;
+
+    flex-direction: column;
+
+    gap: 4px;
+  }
+
+
+  .cheers-heading h3 {
+    font-size: 21px;
+  }
+
+}
+
 </style>
 
+
 <script>
-  type Turnstile = { reset: (el?: Element) => void };
 
-  document.querySelectorAll<HTMLFormElement>('.cheer-form').forEach((form) => {
-    const notice = form.querySelector<HTMLElement>('.notice')!;
-    const left = form.querySelector('[data-left]');
-    const textarea = form.querySelector('textarea')!;
-    const submit = form.querySelector<HTMLButtonElement>('button[type=submit]')!;
-    const list = form.closest('.cheer-wall')!.querySelector('.cheers')!;
+type Turnstile = {
+  reset: (el?: Element) => void;
+};
 
-    textarea.addEventListener('input', () => {
-      if (left) left.textContent = String(280 - textarea.value.length);
-    });
 
-    function show(message: string, kind: 'ok' | 'error') {
+/* =====================================
+   CHEER FORM
+===================================== */
+
+document
+  .querySelectorAll<HTMLFormElement>('.cheer-form')
+  .forEach((form) => {
+
+    const notice =
+      form.querySelector<HTMLElement>(
+        '.notice'
+      )!;
+
+    const left =
+      form.querySelector(
+        '[data-left]'
+      );
+
+    const textarea =
+      form.querySelector(
+        'textarea'
+      )!;
+
+    const submit =
+      form.querySelector<HTMLButtonElement>(
+        'button[type=submit]'
+      )!;
+
+    const list =
+      form
+        .closest('.cheer-wall')!
+        .querySelector('.cheers')!;
+
+
+    /* Character counter */
+
+    textarea.addEventListener(
+      'input',
+      () => {
+
+        if (left) {
+
+          left.textContent =
+            String(
+              280 -
+              textarea.value.length
+            );
+
+        }
+
+      }
+    );
+
+
+    /* Notification */
+
+    function show(
+      message: string,
+      kind: 'ok' | 'error'
+    ) {
+
       notice.hidden = false;
-      notice.className = `notice ${kind}`;
-      notice.textContent = message;
+
+      notice.className =
+        `notice ${kind}`;
+
+      notice.textContent =
+        message;
+
     }
 
-    form.addEventListener('submit', async (event) => {
-      event.preventDefault();
-      const data = new FormData(form);
-      if (!String(data.get('message') ?? '').trim() || !String(data.get('name') ?? '').trim()) {
-        show('Write a message and your name first.', 'error');
-        return;
-      }
-      submit.disabled = true;
-      try {
-        const res = await fetch(form.action, { method: 'POST', body: data, headers: { Accept: 'application/json' } });
-        const result = (await res.json()) as { ok: boolean; status?: string; error?: string; cheer?: { name: string; city: string | null; message: string } };
-        if (!res.ok || !result.ok) {
-          show(result.error ?? 'Your message could not be sent. Try again.', 'error');
-        } else if (result.status === 'visible' && result.cheer) {
-          const li = document.createElement('li');
-          li.className = 'cheer';
-          const p = document.createElement('p');
-          p.className = 'message story-text';
-          p.textContent = result.cheer.message;
-          const by = document.createElement('p');
-          by.className = 'by small muted';
-          by.textContent = `${result.cheer.name}${result.cheer.city ? `, ${result.cheer.city}` : ''} · just now`;
-          li.append(p, by);
-          list.prepend(li);
-          form.closest('.cheer-wall')?.querySelector('.empty')?.remove();
-          form.reset();
-          if (left) left.textContent = '280';
-          show('Thank you. Your cheer is on the wall.', 'ok');
-        } else {
-          form.reset();
-          show('Thank you. Your message will appear after a quick review.', 'ok');
+
+    /* Submit */
+
+    form.addEventListener(
+      'submit',
+      async (event) => {
+
+        event.preventDefault();
+
+
+        const data =
+          new FormData(form);
+
+
+        if (
+          !String(
+            data.get('message') ?? ''
+          ).trim() ||
+
+          !String(
+            data.get('name') ?? ''
+          ).trim()
+        ) {
+
+          show(
+            'Write a message and your name first.',
+            'error'
+          );
+
+          return;
         }
-      } catch {
-        show('Your message could not be sent. Check your connection and try again.', 'error');
-      } finally {
-        submit.disabled = false;
-        const widget = form.querySelector('.cf-turnstile');
-        const ts = (window as unknown as { turnstile?: Turnstile }).turnstile;
-        if (widget && ts) ts.reset(widget);
+
+
+        submit.disabled = true;
+
+
+        try {
+
+          const res =
+            await fetch(
+              form.action,
+              {
+                method: 'POST',
+
+                body: data,
+
+                headers: {
+                  Accept:
+                    'application/json'
+                }
+              }
+            );
+
+
+          const result =
+            (await res.json()) as {
+
+              ok: boolean;
+
+              status?: string;
+
+              error?: string;
+
+              cheer?: {
+
+                name: string;
+
+                city: string | null;
+
+                message: string;
+
+              };
+
+            };
+
+
+          if (
+            !res.ok ||
+            !result.ok
+          ) {
+
+            show(
+              result.error ??
+                'Your message could not be sent. Try again.',
+              'error'
+            );
+
+          }
+
+
+          else if (
+            result.status === 'visible' &&
+            result.cheer
+          ) {
+
+            const li =
+              document.createElement(
+                'li'
+              );
+
+            li.className =
+              'cheer';
+
+
+            /* Pin */
+
+            const pin =
+              document.createElement(
+                'div'
+              );
+
+            pin.className =
+              'pin';
+
+            pin.setAttribute(
+              'aria-hidden',
+              'true'
+            );
+
+
+            /* Message */
+
+            const p =
+              document.createElement(
+                'p'
+              );
+
+            p.className =
+              'message story-text';
+
+            p.textContent =
+              result.cheer.message;
+
+
+            /* Author */
+
+            const by =
+              document.createElement(
+                'p'
+              );
+
+            by.className =
+              'by small muted';
+
+            by.textContent =
+              `${result.cheer.name}${
+                result.cheer.city
+                  ? `, ${result.cheer.city}`
+                  : ''
+              } · just now`;
+
+
+            li.append(
+              pin,
+              p,
+              by
+            );
+
+
+            list.prepend(li);
+
+
+            form
+              .closest('.cheer-wall')
+              ?.querySelector(
+                '.empty'
+              )
+              ?.remove();
+
+
+            form.reset();
+
+
+            if (left) {
+
+              left.textContent =
+                '280';
+
+            }
+
+
+            show(
+              'Thank you. Your cheer is on the wall.',
+              'ok'
+            );
+
+          }
+
+
+          else {
+
+            form.reset();
+
+            show(
+              'Thank you. Your message will appear after a quick review.',
+              'ok'
+            );
+
+          }
+
+        }
+
+
+        catch {
+
+          show(
+            'Your message could not be sent. Check your connection and try again.',
+            'error'
+          );
+
+        }
+
+
+        finally {
+
+          submit.disabled =
+            false;
+
+
+          const widget =
+            form.querySelector(
+              '.cf-turnstile'
+            );
+
+
+          const ts =
+            (
+              window as unknown as {
+                turnstile?: Turnstile
+              }
+            ).turnstile;
+
+
+          if (
+            widget &&
+            ts
+          ) {
+
+            ts.reset(widget);
+
+          }
+
+        }
+
       }
-    });
+    );
+
   });
 
-  document.querySelectorAll<HTMLButtonElement>('.cheer .report').forEach((button) => {
-    button.addEventListener('click', async () => {
-      if (!confirm('Report this message as abusive or spam?')) return;
-      button.disabled = true;
-      await fetch('/api/report', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cheerId: button.dataset.id }),
-      }).catch(() => null);
-      button.textContent = 'Reported. Thank you.';
-    });
+
+/* =====================================
+   REPORT BUTTON
+===================================== */
+
+document
+  .querySelectorAll<HTMLButtonElement>(
+    '.cheer .report'
+  )
+  .forEach((button) => {
+
+    button.addEventListener(
+      'click',
+      async () => {
+
+        if (
+          !confirm(
+            'Report this message as abusive or spam?'
+          )
+        ) {
+
+          return;
+
+        }
+
+
+        button.disabled =
+          true;
+
+
+        await fetch(
+          '/api/report',
+          {
+
+            method: 'POST',
+
+            headers: {
+              'Content-Type':
+                'application/json'
+            },
+
+            body: JSON.stringify({
+              cheerId:
+                button.dataset.id
+            })
+
+          }
+        ).catch(
+          () => null
+        );
+
+
+        button.textContent =
+          'Reported. Thank you.';
+
+      }
+    );
+
   });
+
 </script>
+
