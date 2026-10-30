@@ -16,8 +16,10 @@ const bestMedalOf = (s: { champion_id: string | null; team_id: string | null }):
   directory.find((e) => e.id === (s.champion_id ?? s.team_id))?.medals[0] ?? null;
 
 const [today, ...earlier] = stories;
-const sports = [...new Set(directory.map((e) => e.sport))].sort().slice(0, 8);
-const featured = directory.slice(0, 10);
+// Champions section: individual people only (teams are on the Medals page)
+const people = directory.filter((e) => e.kind === 'champion');
+const sports = [...new Set(people.map((e) => e.sport))].sort().slice(0, 8);
+const featured = people.slice(0, 10);
 
 Astro.response.headers.set('Cache-Control', 'public, max-age=60');
 ---

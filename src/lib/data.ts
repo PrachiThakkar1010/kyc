@@ -268,3 +268,46 @@ export async function getSubjectMedals(db: SupabaseClient, story: Story): Promis
   }
   return medals.sort((a, b) => MEDAL_ORDER[a.medal] - MEDAL_ORDER[b.medal]);
 }
+
+
+// ---------------------------------------------------------------------
+// Team rosters for the medals page: each team's players, and where
+// each player's name should lead (their latest story, or their page)
+// ---------------------------------------------------------------------
+export interface RosterPlayer {
+  name: string;
+  href: string;
+  hasStory: boolean;
+}
+
+export async function getTeamRosters(db: SupabaseClient): Promise<Map<string, RosterPlayer[]>> {
+  const [members, stories] = await Promise.all([
+    db.from('team_members').select('team_id, position, champion:champions(id, name, slug)').order('position'),
+    db
+      .from('stories')
+      .select('slug, champion_id, featured_on')
+      .eq('status', 'published')
+      .not('champion_id', 'is', null)
+      .order('featured_on', { ascending: false }),
+  ]);
+
+  // Newest published story for each champion (the list is already newest first)
+  const storyOf = new Map<string, string>();
+  for (const s of stories.data ?? []) {
+    if (s.champion_id && !storyOf.has(s.champion_id)) storyOf.set(s.champion_id, s.slug);
+  }
+
+  const rosters = new Map<string, RosterPlayer[]>();
+  for (const m of members.data ?? []) {
+    const c = m.champion as unknown as Pick<Champion, 'id' | 'name' | 'slug'> | null;
+    if (!c) continue;
+    const story = storyOf.get(c.id);
+    const player: RosterPlayer = {
+      name: c.name,
+      href: story ? `/stories/${story}` : `/champions/${c.slug}`,
+      hasStory: !!story,
+    };
+    rosters.set(m.team_id, [...(rosters.get(m.team_id) ?? []), player]);
+  }
+  return rosters;
+}

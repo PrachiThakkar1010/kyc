@@ -4,7 +4,8 @@ import ChampionTile from '../../components/ChampionTile.astro';
 import { publicClient } from '../../lib/supabase';
 import { getDirectory } from '../../lib/data';
 
-const directory = await getDirectory(publicClient());
+// Individual champions only; teams are listed on the Medals page
+const directory = (await getDirectory(publicClient())).filter((e) => e.kind === 'champion');
 const sports = [...new Set(directory.map((e) => e.sport))].sort();
 const q = Astro.url.searchParams.get('q') ?? '';
 const sport = (Astro.url.searchParams.get('sport') ?? '').toLowerCase();
@@ -16,7 +17,7 @@ Astro.response.headers.set('Cache-Control', 'public, max-age=60');
 <BaseLayout title="Meet the champions" description="Every Indian medallist at the Aichi-Nagoya 2026 Asian Games.">
   <section class="head">
     <h1>Meet the champions</h1>
-    <p class="muted">Every individual and team who won a medal for India.</p>
+    <p class="muted">Every athlete who won a medal for India, in their own events or as part of a team.</p>
   </section>
 
   <div class="filters" data-initial-sport={sport} data-initial-medal={medal}>

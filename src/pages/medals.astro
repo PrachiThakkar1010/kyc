@@ -3,12 +3,12 @@
 import BaseLayout from '../layouts/BaseLayout.astro';
 import Avatar from '../components/Avatar.astro';
 import { publicClient } from '../lib/supabase';
-import { getAllMedals, getTally } from '../lib/data';
+import { getAllMedals, getTally, getTeamRosters } from '../lib/data';
 import { MEDAL_LABEL, prettyDate } from '../lib/format';
 import type { MedalKind } from '../lib/types';
 
 const db = publicClient();
-const [medals, tally] = await Promise.all([getAllMedals(db), getTally(db)]);
+const [medals, tally, rosters] = await Promise.all([getAllMedals(db), getTally(db), getTeamRosters(db)]);
 const kinds: MedalKind[] = ['gold', 'silver', 'bronze'];
 const sportsCount = new Set(medals.map((m) => m.sport)).size;
 
@@ -40,6 +40,11 @@ Astro.response.headers.set('Cache-Control', 'public, max-age=60');
   {
     kinds.map((k) => {
       const list = medals.filter((m) => m.medal === k);
+      // Individual medals first, then team medals
+      const parts = [
+        { label: 'Individual', items: list.filter((m) => !m.team) },
+        { label: 'Team ', items: list.filter((m) => m.team) },
+      ];
       return (
         <section class={`group ${k}`} id={k} aria-labelledby={`${k}-title`}>
           <div class="group-head">
@@ -48,29 +53,82 @@ Astro.response.headers.set('Cache-Control', 'public, max-age=60');
             <span class="group-count">{list.length}</span>
           </div>
 
-          <ul class="cards">
-            {list.map((m) => {
-              const who = m.team ?? m.champion;
-              const href = m.team ? `/teams/${m.team.slug}` : `/champions/${m.champion?.slug}`;
-              return (
-                <li>
-                  <a href={href} class="card">
-                    <Avatar name={who?.name ?? ''} path={who?.photo_path ?? null} size={48} />
-                    <span class="card-text">
-                      <span class="name">{who?.name}</span>
-                      <span class="event">{m.event}</span>
-                      <span class="meta">
-                        <span class="sport">{m.sport}</span>
-                        {m.team && <span class="team-tag">Team</span>}
-                        {m.won_on && <span class="date">{prettyDate(m.won_on)}</span>}
-                      </span>
-                    </span>
-                    <span class={`ribbon ${k}`} aria-hidden="true" />
-                  </a>
-                </li>
-              );
-            })}
-          </ul>
+          {parts.map((part) => part.items.length > 0 && (
+            <div class="part">
+              <h3 class="part-title">
+                {part.label}
+                <span class="part-count">{part.items.length}</span>
+              </h3>
+              <ul class="cards">
+                {part.items.map((m) => {
+                  // ---- Team medal: team name, then its players ----
+                  if (m.team) {
+                    const players = rosters.get(m.team_id!) ?? [];
+                    return (
+                      <li>
+                        <div class="card team-card">
+                          <div class="card-top">
+                            <Avatar name={m.team.name} path={m.team.photo_path} size={48} />
+                            <span class="card-text">
+                              <a href={`/teams/${m.team.slug}`} class="name team-link">{m.team.name}</a>
+                              <span class="event">{m.event}</span>
+                              <span class="meta">
+                                <span class="sport">{m.sport}</span>
+                                {m.won_on && <span class="date">{prettyDate(m.won_on)}</span>}
+                              </span>
+                            </span>
+                          </div>
+
+                          {players.length > 0 ? (
+                            <details class="roster">
+                              <summary>
+                                {players.length} {players.length === 1 ? 'champion' : 'champions'}
+                                <svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
+                              </summary>
+                              <ul class="players">
+                                {players.map((p) => (
+                                  <li>
+                                    <a href={p.href} class="player">
+                                      <span>{p.name}</span>
+                                      <span class:list={['player-tag', { ready: p.hasStory }]}>
+                                        {p.hasStory ? 'Read story' : 'Story soon'}
+                                      </span>
+                                    </a>
+                                  </li>
+                                ))}
+                              </ul>
+                            </details>
+                          ) : (
+                            <p class="roster-empty">Squad list coming soon</p>
+                          )}
+                          <span class={`ribbon ${k}`} aria-hidden="true" />
+                        </div>
+                      </li>
+                    );
+                  }
+
+                  // ---- Individual medal: the whole card links to the champion ----
+                  const who = m.champion;
+                  return (
+                    <li>
+                      <a href={`/champions/${who?.slug}`} class="card">
+                        <Avatar name={who?.name ?? ''} path={who?.photo_path ?? null} size={48} />
+                        <span class="card-text">
+                          <span class="name">{who?.name}</span>
+                          <span class="event">{m.event}</span>
+                          <span class="meta">
+                            <span class="sport">{m.sport}</span>
+                            {m.won_on && <span class="date">{prettyDate(m.won_on)}</span>}
+                          </span>
+                        </span>
+                        <span class={`ribbon ${k}`} aria-hidden="true" />
+                      </a>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ))}
         </section>
       );
     })
@@ -139,8 +197,29 @@ Astro.response.headers.set('Cache-Control', 'public, max-age=60');
   .silver .group-count { background: var(--silver-bg); color: var(--silver-ink); }
   .bronze .group-count { background: var(--bronze-bg); color: var(--bronze-ink); }
 
+  /* ---------- Individual / Team sub-sections ---------- */
+  .part + .part { margin-top: 28px; }
+  .part-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .part-count {
+    padding: 1px 8px;
+    border-radius: 999px;
+    background: var(--soft);
+    font-size: 12px;
+    letter-spacing: 0;
+  }
+
   /* ---------- Medal cards ---------- */
-  .cards { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr; gap: 10px; }
+  .cards { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr; gap: 10px; align-items: start; }
   .card {
     position: relative;
     overflow: hidden;
@@ -168,12 +247,47 @@ Astro.response.headers.set('Cache-Control', 'public, max-age=60');
   .name { font-size: 16px; font-weight: 700; line-height: 1.25; }
   .event { font-size: 14px; color: var(--ink); }
   .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 12px; color: var(--muted); }
-  .team-tag {
-    padding: 1px 8px;
-    border-radius: 999px;
-    background: var(--soft);
+
+  /* ---------- Team medal cards ---------- */
+  .team-card { flex-direction: column; align-items: stretch; gap: 10px; }
+  .team-card:hover { transform: none; }
+  .card-top { display: flex; align-items: center; gap: 14px; }
+  .team-link { color: var(--ink); text-decoration: none; }
+  .team-link:hover { color: var(--accent-ink); text-decoration: underline; text-underline-offset: 3px; }
+
+  .roster { border-top: 1px solid var(--line); padding-top: 8px; }
+  .roster summary {
+    list-style: none;
+    min-height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 14px;
     font-weight: 600;
+    color: var(--accent-ink);
+    cursor: pointer;
   }
+  .roster summary::-webkit-details-marker { display: none; }
+  .chevron { transition: transform 0.2s; }
+  .roster[open] .chevron { transform: rotate(180deg); }
+
+  .players { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; }
+  .player {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 6px 10px;
+    border-radius: 10px;
+    color: var(--ink);
+    text-decoration: none;
+    font-size: 15px;
+  }
+  .player:hover { background: var(--soft); }
+  .player-tag { flex-shrink: 0; font-size: 12px; font-weight: 600; color: var(--muted); }
+  .player-tag.ready { color: var(--accent-ink); }
+  .roster-empty { border-top: 1px solid var(--line); padding-top: 10px; font-size: 13px; color: var(--muted); }
 
   @media (min-width: 640px) {
     .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
