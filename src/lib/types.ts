@@ -67,6 +67,7 @@ export interface Story {
   cover_path: string | null;
   cover_credit: string | null;
   featured_on: string | null;
+  featured: boolean;
   status: 'draft' | 'published';
   author_name: string | null;
   champion?: Champion | null;

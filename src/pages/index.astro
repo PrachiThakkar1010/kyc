@@ -9,13 +9,18 @@ import { getDirectory, getStories, getTally } from '../lib/data';
 import type { MedalKind } from '../lib/types';
 
 const db = publicClient();
-const [tally, stories, directory] = await Promise.all([getTally(db), getStories(db, 4), getDirectory(db)]);
+const [tally, stories, directory] = await Promise.all([getTally(db), getStories(db, 20), getDirectory(db)]);
 
 // Each story's best medal, from the directory we already loaded.
 const bestMedalOf = (s: { champion_id: string | null; team_id: string | null }): MedalKind | null =>
   directory.find((e) => e.id === (s.champion_id ?? s.team_id))?.medals[0] ?? null;
 
-const [today, ...earlier] = stories;
+// Story of the Day: the story a writer picked for today's home page, or
+// else the newest of today's stories. Other stories with the same date
+// appear under "Also today"; older ones under "Earlier stories".
+const [today, ...rest] = stories;
+const alsoToday = today ? rest.filter((s) => s.featured_on === today.featured_on) : [];
+const earlier = rest.filter((s) => s.featured_on !== today?.featured_on).slice(0, 3);
 // Champions section: individual people only (teams are on the Medals page)
 const people = directory.filter((e) => e.kind === 'champion');
 const sports = [...new Set(people.map((e) => e.sport))].sort().slice(0, 8);
@@ -62,6 +67,22 @@ Astro.response.headers.set('Cache-Control', 'public, max-age=60');
       }
     </section>
   </div>
+
+  {
+    alsoToday.length > 0 && (
+      <section class="section also-today" aria-labelledby="also-title">
+        <div class="section-head">
+          <h2 id="also-title">Also today</h2>
+          <span class="muted small">{alsoToday.length + 1} journeys today</span>
+        </div>
+        <ul class="story-list">
+          {alsoToday.map((s) => (
+            <StoryRow story={s} medal={bestMedalOf(s)} />
+          ))}
+        </ul>
+      </section>
+    )
+  }
 
   {
     earlier.length > 0 && (
@@ -171,6 +192,7 @@ Astro.response.headers.set('Cache-Control', 'public, max-age=60');
   }
 
   .story-list { margin: 0; padding: 0; }
+  .also-today { margin-top: 32px; }
   @media (min-width: 768px) {
     .story-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 32px; }
   }

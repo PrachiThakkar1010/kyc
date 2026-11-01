@@ -5,7 +5,7 @@ import type { Champion, Cheer, Medal, MedalKind, Stop, Story, Team } from './typ
 import { MEDAL_ORDER } from './format';
 
 const STORY_FIELDS =
-  'id, slug, headline, hook, champion_id, team_id, cover_path, cover_credit, featured_on, status, author_name, ' +
+  'id, slug, headline, hook, champion_id, team_id, cover_path, cover_credit, featured_on, featured, status, author_name, ' +
   'champion:champions(*), team:teams(*), stops:story_stops(*)';
 
 function sortStops<T extends { stops?: Stop[] }>(story: T): T {
@@ -43,6 +43,8 @@ export async function getStories(db: SupabaseClient, limit = 200): Promise<Story
     .select(STORY_FIELDS)
     .eq('status', 'published')
     .order('featured_on', { ascending: false })
+    .order('featured', { ascending: false })
+    .order('created_at', { ascending: false })
     .limit(limit);
   return ((data ?? []) as unknown as Story[]).map(sortStops);
 }
@@ -60,6 +62,8 @@ async function getStoryFor(db: SupabaseClient, column: 'champion_id' | 'team_id'
     .eq(column, id)
     .eq('status', 'published')
     .order('featured_on', { ascending: false })
+    .order('featured', { ascending: false })
+    .order('created_at', { ascending: false })
     .limit(1);
   const story = (data?.[0] as unknown as Story) ?? null;
   return story ? sortStops(story) : null;
@@ -164,8 +168,8 @@ export async function getDirectory(db: SupabaseClient): Promise<DirectoryEntry[]
 // All medals, for the medals page
 // ---------------------------------------------------------------------
 export interface MedalRow extends Medal {
-   champion: Pick<Champion, 'name' | 'slug' | 'photo_path'> | null;
-   team: Pick<Team, 'name' | 'slug' | 'photo_path'> | null;
+  champion: Pick<Champion, 'name' | 'slug' | 'photo_path'> | null;
+  team: Pick<Team, 'name' | 'slug' | 'photo_path'> | null;
 }
 
 export async function getAllMedals(db: SupabaseClient): Promise<MedalRow[]> {
@@ -269,7 +273,6 @@ export async function getSubjectMedals(db: SupabaseClient, story: Story): Promis
   return medals.sort((a, b) => MEDAL_ORDER[a.medal] - MEDAL_ORDER[b.medal]);
 }
 
-
 // ---------------------------------------------------------------------
 // Team rosters for the medals page: each team's players, and where
 // each player's name should lead (their latest story, or their page)
@@ -288,7 +291,8 @@ export async function getTeamRosters(db: SupabaseClient): Promise<Map<string, Ro
       .select('slug, champion_id, featured_on')
       .eq('status', 'published')
       .not('champion_id', 'is', null)
-      .order('featured_on', { ascending: false }),
+      .order('featured_on', { ascending: false })
+      .order('created_at', { ascending: false }),
   ]);
 
   // Newest published story for each champion (the list is already newest first)

@@ -47,6 +47,7 @@ if (Astro.request.method === 'POST') {
       if (!headline) throw new Error('Write a headline.');
       const status = text(form, 'status') === 'published' ? 'published' : 'draft';
       const featuredOn = text(form, 'featured_on') || null;
+      const featured = form.get('featured') === '1' && !!featuredOn;
       if (status === 'published' && !featuredOn) throw new Error('Choose the day this story becomes Story of the Day.');
 
       // Stops arrive as parallel lists, one entry per stop.
@@ -108,9 +109,20 @@ if (Astro.request.method === 'POST') {
         cover_path: coverPath,
         cover_credit: optional(form, 'cover_credit', 120),
         featured_on: featuredOn,
+        featured,
         status,
         ...(story ? {} : { author_id: profile.id, author_name: profile.display_name }),
       };
+
+      // Only one story per date can be on the home page: untick the others.
+      if (featured) {
+        const { error: unfeature } = await db
+          .from('stories')
+          .update({ featured: false })
+          .eq('featured_on', featuredOn!)
+          .neq('id', storyId);
+        if (unfeature) throw new Error(friendlyError(unfeature));
+      }
 
       const { error: saveError } = story
         ? await db.from('stories').update(row).eq('id', story.id)
@@ -184,7 +196,7 @@ const stops: Stop[] = story?.stops?.length
         </label>
         <div class="two">
           <label class="field">
-            Story of the Day on
+            Publish date
             <input type="date" name="featured_on" value={story?.featured_on ?? ''} />
           </label>
           <label class="field">
@@ -195,6 +207,13 @@ const stops: Stop[] = story?.stops?.length
             </select>
           </label>
         </div>
+        <label class="check">
+          <input type="checkbox" name="featured" value="1" checked={story?.featured ?? false} />
+          <span>
+            <strong>Show on the home page as the Story of the Day</strong>
+            <span class="hint">If several stories share this date, this one gets the big card; the others appear under "Also today". Leave unticked to let the newest story of the day be shown.</span>
+          </span>
+        </label>
         <label class="field">
           Web address <span class="hint">Optional. Leave empty to use the champion's name. Letters, numbers and dashes.</span>
           <input type="text" name="slug" maxlength="80" pattern="[a-z0-9\-]*" value={story?.slug ?? ''} placeholder="lovlina-borgohain" />
@@ -321,6 +340,10 @@ const stops: Stop[] = story?.stops?.length
 
 <style>
   .panel h2 { font-size: 20px; }
+  .check { display: flex; gap: 12px; align-items: flex-start; font-size: 15px; cursor: pointer; }
+  .check input { width: 22px; height: 22px; margin-top: 2px; flex-shrink: 0; accent-color: var(--accent); }
+  .check span { display: flex; flex-direction: column; gap: 4px; }
+  .check .hint { font-size: 13px; color: var(--muted); font-weight: 400; }
   .stop-editor { border: 1px solid var(--line); border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 12px; margin: 0; }
   .stop-editor legend { font-weight: 700; padding: 0 6px; }
   .sticky-save { position: sticky; bottom: 0; padding: 12px 0; background: var(--bg); border-top: 1px solid var(--line); }

@@ -1,28 +1,67 @@
 ---
 import AdminLayout from '../../layouts/AdminLayout.astro';
 import { prettyDate, todayIST } from '../../lib/format';
+import { friendlyError, withMessage } from '../../lib/admin';
+import { isUuid, text } from '../../lib/http';
 
 const db = Astro.locals.supabase;
+
+// ---------- "Show on home page" button ----------
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const id = text(form, 'id');
+  if (text(form, 'action') === 'feature' && isUuid(id)) {
+    const { data: story } = await db.from('stories').select('featured_on').eq('id', id).maybeSingle();
+    if (story?.featured_on) {
+      // Untick every other story on that date, then tick this one.
+      const off = await db.from('stories').update({ featured: false }).eq('featured_on', story.featured_on).neq('id', id);
+      const on = off.error ? off : await db.from('stories').update({ featured: true }).eq('id', id);
+      return Astro.redirect(
+        on.error
+          ? withMessage('/admin', friendlyError(on.error), 'error')
+          : withMessage('/admin', `This story is now on the home page for ${prettyDate(story.featured_on)}.`),
+      );
+    }
+  }
+  return Astro.redirect('/admin');
+}
+
 const [stories, pending, newFeedback] = await Promise.all([
   db
     .from('stories')
-    .select('id, slug, headline, status, featured_on, author_name, updated_at, champion:champions(name), team:teams(name)')
+    .select('id, slug, headline, status, featured_on, featured, author_name, created_at, champion:champions(name), team:teams(name)')
     .order('featured_on', { ascending: false, nullsFirst: true })
-    .order('updated_at', { ascending: false }),
+    .order('featured', { ascending: false })
+    .order('created_at', { ascending: false }),
   db.from('cheers').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
   db.from('feedback').select('id', { count: 'exact', head: true }).eq('status', 'new'),
 ]);
 
 const today = todayIST();
-type Row = { id: string; slug: string; headline: string; status: string; featured_on: string | null; author_name: string | null; champion: { name: string } | null; team: { name: string } | null };
+type Row = {
+  id: string; slug: string; headline: string; status: string; featured_on: string | null; featured: boolean;
+  author_name: string | null; champion: { name: string } | null; team: { name: string } | null;
+};
 const rows = (stories.data ?? []) as unknown as Row[];
-const todays = rows.find((s) => s.status === 'published' && s.featured_on === today);
+
+// For each date, the story the home page shows: the one ticked, or else the
+// newest published one. The rows are already sorted that way within each day.
+const homeStoryOf = new Map<string, string>();
+for (const s of rows) {
+  if (s.status === 'published' && s.featured_on && !homeStoryOf.has(s.featured_on)) homeStoryOf.set(s.featured_on, s.id);
+}
+const sameDayCount = (date: string | null) =>
+  rows.filter((s) => s.status === 'published' && date && s.featured_on === date).length;
+
+const todays = rows.find((s) => s.id === homeStoryOf.get(today));
+const alsoTodayCount = Math.max(0, sameDayCount(today) - 1);
 const scheduled = rows.filter((s) => s.status === 'published' && s.featured_on && s.featured_on > today).length;
 
 function state(s: Row) {
   if (s.status === 'draft') return { label: 'Draft', cls: 'draft' };
-  if (s.featured_on && s.featured_on > today) return { label: 'Scheduled', cls: 'pending' };
-  if (s.featured_on === today) return { label: 'Story of the day', cls: 'published' };
+  const onHome = homeStoryOf.get(s.featured_on ?? '') === s.id;
+  if (s.featured_on && s.featured_on > today) return { label: onHome && sameDayCount(s.featured_on) > 1 ? 'Scheduled, home page' : 'Scheduled', cls: 'pending' };
+  if (s.featured_on === today) return onHome ? { label: 'Story of the day', cls: 'published' } : { label: 'Also today', cls: 'published' };
   return { label: 'Published', cls: 'published' };
 }
 ---
@@ -38,7 +77,9 @@ function state(s: Row) {
       <div class="panel">
         <span class="small muted">Story of the day</span>
         {todays ? <a href={`/admin/stories/${todays.id}`}><strong>{todays.headline}</strong></a> : <strong>Nothing for today yet</strong>}
-        <span class="small muted">{scheduled} scheduled for later days</span>
+        <span class="small muted">
+          {alsoTodayCount > 0 ? `${alsoTodayCount} more under "Also today". ` : ''}{scheduled} scheduled for later days
+        </span>
       </div>
       <a class="panel link-panel" href="/admin/cheers?status=pending">
         <span class="small muted">Cheers waiting for review</span>
@@ -61,11 +102,15 @@ function state(s: Row) {
                 <th>Day</th>
                 <th>Status</th>
                 <th>Writer</th>
+                <th>Home page</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((s) => {
                 const st = state(s);
+                const onHome = homeStoryOf.get(s.featured_on ?? '') === s.id;
+                // The button only matters when another published story shares the date.
+                const canPick = s.status === 'published' && !onHome && sameDayCount(s.featured_on) > 1 && (s.featured_on ?? '') >= today;
                 return (
                   <tr>
                     <td><a href={`/admin/stories/${s.id}`}>{s.headline}</a></td>
@@ -73,6 +118,16 @@ function state(s: Row) {
                     <td>{s.featured_on ? prettyDate(s.featured_on) : '—'}</td>
                     <td><span class={`tag ${st.cls}`}>{st.label}</span></td>
                     <td class="muted">{s.author_name}</td>
+                    <td>
+                      {canPick && (
+                        <form method="post" class="inline">
+                          <input type="hidden" name="action" value="feature" />
+                          <input type="hidden" name="id" value={s.id} />
+                          <button type="submit" class="button-quiet">Show on home page</button>
+                        </form>
+                      )}
+                      {onHome && s.status === 'published' && sameDayCount(s.featured_on) > 1 && <span class="small">On home page</span>}
+                    </td>
                   </tr>
                 );
               })}
