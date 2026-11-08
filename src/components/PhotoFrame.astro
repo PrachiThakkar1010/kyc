@@ -1,0 +1,79 @@
+---
+// A photo that fills the box it sits in, whatever the photo's shape.
+// Landscape photos fill the frame (a little may be trimmed at the edges).
+// Portrait or square photos that would lose too much are shown whole,
+// with a soft blurred copy of the same photo filling the empty space.
+// The frame takes the size of the box around it. To set a size from a page,
+// target it from that page as  .your-box :global(.photo-frame) { height: ... }
+interface Props {
+  src: string;
+  alt?: string;
+  eager?: boolean;
+}
+const { src, alt = '', eager = false } = Astro.props;
+---
+
+<div class="photo-frame">
+  <img class="backdrop" src={src} alt="" aria-hidden="true" loading={eager ? 'eager' : 'lazy'} />
+  <img class="main" src={src} alt={alt} loading={eager ? 'eager' : 'lazy'} />
+</div>
+
+<style>
+  .photo-frame {
+    position: relative;
+    overflow: hidden;
+    width: 100%;
+    height: 100%;
+    background: var(--soft);
+  }
+  .main {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center 30%;   /* faces are usually in the upper part */
+  }
+  .backdrop {
+    position: absolute;
+    top: -60px;
+    left: -60px;
+    width: calc(100% + 120px);   /* larger than the frame, so the blur */
+    height: calc(100% + 120px);  /* never fades out at the edges        */
+    max-width: none;             /* the site-wide img rule would stop it short */
+    object-fit: cover;
+    filter: blur(24px) brightness(0.8);
+    opacity: 0;
+  }
+
+  /* Tall photos: show all of it, blurred copy behind */
+  .photo-frame.fit .main { object-fit: contain; }
+  .photo-frame.fit .backdrop { opacity: 1; }
+</style>
+
+<script>
+  // Decide, per photo, whether to fill the frame or show the whole photo.
+  // A photo is "fitted" when filling the frame would cut away more than
+  // 40% of it, which happens with portrait photos in wide frames.
+  function check(frame: HTMLElement) {
+    const img = frame.querySelector<HTMLImageElement>('img.main');
+    if (!img || !img.naturalWidth || !frame.clientHeight) return;
+    const photoShape = img.naturalWidth / img.naturalHeight;
+    const frameShape = frame.clientWidth / frame.clientHeight;
+    frame.classList.toggle('fit', photoShape < frameShape * 0.6);
+  }
+
+  const frames = Array.from(document.querySelectorAll<HTMLElement>('.photo-frame'));
+  for (const frame of frames) {
+    const img = frame.querySelector<HTMLImageElement>('img.main');
+    if (!img) continue;
+    if (img.complete) check(frame);
+    else img.addEventListener('load', () => check(frame), { once: true });
+  }
+
+  // Re-check when the screen size changes (turning a phone, resizing a window)
+  let timer: number | undefined;
+  window.addEventListener('resize', () => {
+    clearTimeout(timer);
+    timer = window.setTimeout(() => frames.forEach(check), 150);
+  });
+</script>

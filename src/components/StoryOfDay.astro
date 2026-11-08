@@ -1,6 +1,7 @@
 ---
 // The big Story of the Day card on the home page. The whole card is one link.
 import JourneyRoad from './JourneyRoad.astro';
+import PhotoFrame from './PhotoFrame.astro';
 import type { MedalKind, Story } from '../lib/types';
 import { photoUrl } from '../lib/supabase';
 import { readMinutes } from '../lib/format';
@@ -26,7 +27,7 @@ const pronoun = subject.isTeam ? 'their' : 'the';
 
 <a href={`/stories/${story.slug}`} class="sotd" aria-label={`Read today's story: ${subject.name}. ${story.headline}`}>
   <div class="photo">
-    {cover ? <img src={cover} alt="" loading="eager" /> : <span class="placeholder">{subject.name}</span>}
+    {cover ? <PhotoFrame src={cover} eager /> : <span class="placeholder">{subject.name}</span>}
     <span class="badge">Story of the day</span>
     {
       medal && (
@@ -74,7 +75,6 @@ const pronoun = subject.isTeam ? 'their' : 'the';
     align-items: center;
     justify-content: center;
   }
-  .photo img { width: 100%; height: 100%; object-fit: cover; }
   .placeholder { font-size: 28px; font-weight: 700; color: var(--card-muted); padding: 0 24px; text-align: center; }
   .badge {
     position: absolute; top: 16px; left: 16px;

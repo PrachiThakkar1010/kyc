@@ -4,6 +4,7 @@ import Journey from '../../components/Journey.astro';
 import Reactions from '../../components/Reactions.astro';
 import ShareBar from '../../components/ShareBar.astro';
 import CheerWall from '../../components/CheerWall.astro';
+import PhotoFrame from '../../components/PhotoFrame.astro';
 import { photoUrl } from '../../lib/supabase';
 import { readerClient } from '../../lib/reader';
 import { getCheers, getReactionCounts, getStoryBySlug, getSubjectMedals, getTeamPage, storySubject } from '../../lib/data';
@@ -44,7 +45,7 @@ Astro.response.headers.set('Cache-Control', preview ? 'private, no-store' : 'pub
     {
       cover && (
         <figure class="cover">
-          <img src={cover} alt={`${subject.name}`} />
+          <PhotoFrame src={cover} alt={subject.name} eager />
           {story.cover_credit && <figcaption>Photo: {story.cover_credit}</figcaption>}
         </figure>
       )
@@ -104,11 +105,12 @@ Astro.response.headers.set('Cache-Control', preview ? 'private, no-store' : 'pub
 <style>
   .preview { margin-top: 16px; }
   .cover { margin: 0 -20px; }
-  .cover img { width: 100%; max-height: 460px; object-fit: cover; }
+  /* Photo frame size (the frame lives in the PhotoFrame component) */
+  .cover :global(.photo-frame) { height: 320px; }
   .cover figcaption { font-size: 12px; color: var(--muted); padding: 6px 20px 0; }
   @media (min-width: 760px) {
     .cover { margin: 24px 0 0; }
-    .cover img { border-radius: 20px; max-height: 560px; }
+    .cover :global(.photo-frame) { height: 540px; border-radius: 20px; }
     .cover figcaption { padding-left: 0; }
     .story-head { padding-top: 36px; }
     h1 { font-size: 48px; }

@@ -4,6 +4,7 @@
 import type { Stop } from '../lib/types';
 import { STOP_LABEL, paragraphs } from '../lib/format';
 import { photoUrl } from '../lib/supabase';
+import PhotoFrame from './PhotoFrame.astro';
 
 interface Props {
   stops: Stop[];
@@ -23,11 +24,11 @@ const { stops } = Astro.props;
           </div>
           <div class="content">
             <span class="kind">{STOP_LABEL[stop.kind]}</span>
-            <h3>{stop.title}</h3>
+            <h3>{stop.title || 'Unnamed section'}</h3>
             {stop.place && <span class="place">{stop.place}</span>}
             {photo && (
               <figure>
-                <img src={photo} alt="" loading="lazy" />
+                <PhotoFrame src={photo} />
                 {stop.photo_credit && <figcaption>Photo: {stop.photo_credit}</figcaption>}
               </figure>
             )}
@@ -84,7 +85,8 @@ const { stops } = Astro.props;
   h3 { font-size: 21px; line-height: 1.2; }
   .place { font-size: 13px; color: var(--muted); }
   figure { margin-top: 8px; }
-  figure img { border-radius: 12px; width: 100%; }
+  /* Stop photos: a 3:2 frame, so landscape photos fit exactly */
+  figure :global(.photo-frame) { aspect-ratio: 3 / 2; height: auto; border-radius: 12px; }
   figcaption { font-size: 12px; color: var(--muted); margin-top: 6px; }
   .body { margin-top: 6px; display: flex; flex-direction: column; gap: 14px; font-family: var(--font-story); font-size: 17px; line-height: 1.75; }
 </style>

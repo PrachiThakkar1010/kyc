@@ -50,12 +50,35 @@ if (Astro.request.method === 'POST') {
       const featured = form.get('featured') === '1' && !!featuredOn;
       if (status === 'published' && !featuredOn) throw new Error('Choose the day this story becomes Story of the Day.');
 
-      // Stops arrive as parallel lists, one entry per stop.
+      // Stops arrive as parallel lists, one entry per stop on the form.
       const kinds = form.getAll('stop_kind').map(String);
-      const titles = form.getAll('stop_title').map((v) => String(v).trim());
-      if (!kinds.length) throw new Error('Add at least one stop to the journey.');
-      const missing = titles.findIndex((t) => !t);
-      if (missing >= 0) throw new Error(`Stop ${missing + 1} needs a title.`);
+      const field = (name: string, max: number) => form.getAll(name).map((v) => String(v ?? '').trim().slice(0, max));
+      const titles = field('stop_title', 160);
+      const labels = field('stop_label', 30);
+      const places = field('stop_place', 120);
+      const bodies = field('stop_body', 8000);
+      const credits = field('stop_photo_credit', 120);
+      const keptPaths = form.getAll('stop_photo_path').map(String);
+      const files = form.getAll('stop_photo');
+      const hasNewPhoto = (i: number) => {
+        const f = files[i];
+        return !!f && typeof f !== 'string' && f.size > 0;
+      };
+
+      // Sort the stops before uploading anything:
+      //  - completely empty stops are skipped
+      //  - a stop with writing (or a photo) but no title is kept as an
+      //    "unnamed section", which only a draft may have
+      const keep: number[] = [];
+      for (let i = 0; i < kinds.length; i++) {
+        const empty = !titles[i] && !bodies[i] && !labels[i] && !places[i] && !credits[i] && !keptPaths[i] && !hasNewPhoto(i);
+        if (empty) continue;
+        if (!titles[i] && status === 'published') {
+          throw new Error(`Stop ${i + 1} has no title. Give it one, or save the story as a draft for now.`);
+        }
+        keep.push(i);
+      }
+      if (status === 'published' && !keep.length) throw new Error('Add at least one stop to the journey before publishing.');
 
       // Make sure the story has an id before photos are stored under it.
       const storyId = story?.id ?? crypto.randomUUID();
@@ -70,22 +93,20 @@ if (Astro.request.method === 'POST') {
         coverPath = newCover;
       }
 
-      // Stop photos
-      const keptPaths = form.getAll('stop_photo_path').map(String);
-      const files = form.getAll('stop_photo');
+      // Stop photos, for the stops we're keeping (numbered again from 0)
       const stops = [];
-      for (let i = 0; i < kinds.length; i++) {
+      for (const i of keep) {
         const uploaded = await uploadPhoto(db, files[i] ?? null, folder);
         stops.push({
           story_id: storyId,
-          position: i,
+          position: stops.length,
           kind: (STOP_KINDS.includes(kinds[i] as StopKind) ? kinds[i] : 'turning_point') as StopKind,
-          label: String(form.getAll('stop_label')[i] ?? '').trim().slice(0, 30) || null,
-          place: String(form.getAll('stop_place')[i] ?? '').trim().slice(0, 120) || null,
-          title: titles[i]!.slice(0, 160),
-          body: String(form.getAll('stop_body')[i] ?? '').trim().slice(0, 8000),
+          label: labels[i] || null,
+          place: places[i] || null,
+          title: titles[i] ?? '', // empty title = unnamed section
+          body: bodies[i] ?? '',
           photo_path: uploaded ?? (keptPaths[i] || null),
-          photo_credit: String(form.getAll('stop_photo_credit')[i] ?? '').trim().slice(0, 120) || null,
+          photo_credit: credits[i] || null,
         });
       }
       const stillUsed = new Set(stops.map((s) => s.photo_path));
@@ -132,15 +153,19 @@ if (Astro.request.method === 'POST') {
       // Replace the journey with what's in the form.
       const { error: delStops } = await db.from('story_stops').delete().eq('story_id', storyId);
       if (delStops) throw new Error(friendlyError(delStops));
-      const { error: stopError } = await db.from('story_stops').insert(stops);
-      if (stopError) throw new Error(friendlyError(stopError));
+      if (stops.length) {
+        const { error: stopError } = await db.from('story_stops').insert(stops);
+        if (stopError) throw new Error(friendlyError(stopError));
+      }
 
       await removePhotos(db, oldPhotos);
 
       const saved = status === 'published'
         ? featuredOn && featuredOn > todayIST() ? 'Saved. It will appear on its day.' : 'Saved and published.'
         : 'Draft saved.';
-      return Astro.redirect(withMessage(`/admin/stories/${storyId}`, saved));
+      const skipped = kinds.length - keep.length;
+      const note = skipped ? ` ${skipped} empty ${skipped === 1 ? 'stop was' : 'stops were'} left out.` : '';
+      return Astro.redirect(withMessage(`/admin/stories/${storyId}`, saved + note));
     } catch (e) {
       error = e instanceof Error ? e.message : 'The story could not be saved.';
     }
@@ -245,6 +270,7 @@ const stops: Stop[] = story?.stops?.length
         <p class="small muted">
           Each stop is a chapter. Mark the hard part as a <strong>Setback</strong> so it shows as a dashed stretch of road. End with
           <strong>The podium</strong>. Leave a blank line between paragraphs.
+          Empty stops are left out when you save. In a draft, a stop can stay untitled for now: it's saved as an unnamed section.
         </p>
         <div id="stops" class="stack">
           {
@@ -263,7 +289,7 @@ const stops: Stop[] = story?.stops?.length
                     <input type="text" name="stop_label" maxlength="30" value={s.label ?? ''} />
                   </label>
                 </div>
-                <label class="field">Title <input type="text" name="stop_title" maxlength="160" value={s.title} /></label>
+                <label class="field">Title <input type="text" name="stop_title" maxlength="160" value={s.title} placeholder="Unnamed section" /></label>
                 <label class="field">Place and year <input type="text" name="stop_place" maxlength="120" value={s.place ?? ''} placeholder="Baro Mukhia, Golaghat, 2009" /></label>
                 <label class="field">Chapter <textarea name="stop_body" rows="6">{s.body}</textarea></label>
                 <div class="two">
@@ -319,7 +345,7 @@ const stops: Stop[] = story?.stops?.length
         </label>
         <label class="field">Road label <span class="hint">One or two words</span><input type="text" name="stop_label" maxlength="30" /></label>
       </div>
-      <label class="field">Title <input type="text" name="stop_title" maxlength="160" /></label>
+      <label class="field">Title <input type="text" name="stop_title" maxlength="160" placeholder="Unnamed section" /></label>
       <label class="field">Place and year <input type="text" name="stop_place" maxlength="120" /></label>
       <label class="field">Chapter <textarea name="stop_body" rows="6"></textarea></label>
       <div class="two">
